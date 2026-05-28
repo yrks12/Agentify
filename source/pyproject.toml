@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentify"
+version = "0.1.0"
+description = "Turn any website into an AI-controllable agent via Playwright + OpenAI"
+requires-python = ">=3.10"
+dependencies = [
+    "playwright>=1.45",
+    "typer>=0.12",
+    "openai>=1.40",
+    "rich>=13.7",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+agentify = "agentify.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["agentify*"]

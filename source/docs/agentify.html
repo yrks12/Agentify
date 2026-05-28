@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentify — מדריך לימוד מלא</title>
+<style>
+  :root {
+    --bg: #f6f5f1;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --muted: #5e6470;
+    --line: #e3e1da;
+    --accent: #1d4ed8;
+    --accent-soft: rgba(29, 78, 216, 0.12);
+    --code-bg: #1d1f23;
+    --code-text: #f0eee7;
+    --good: #166534;
+    --warn: #a16207;
+  }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Heebo", "Assistant", "Segoe UI", system-ui, -apple-system, sans-serif;
+    font-size: 17px;
+    line-height: 1.7;
+  }
+  body {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 40px 28px 80px;
+  }
+  header {
+    border-bottom: 2px solid var(--text);
+    padding-bottom: 28px;
+    margin-bottom: 40px;
+  }
+  header .kicker {
+    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  h1 {
+    margin: 0 0 8px;
+    font-size: 48px;
+    line-height: 1.1;
+    font-weight: 800;
+  }
+  header p.lead {
+    margin: 12px 0 0;
+    font-size: 19px;
+    color: var(--muted);
+    max-width: 720px;
+  }
+  h2 {
+    font-size: 30px;
+    margin: 56px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 {
+    font-size: 22px;
+    margin: 32px 0 8px;
+  }
+  h4 {
+    font-size: 16px;
+    margin: 0 0 6px;
+    letter-spacing: 0.04em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  p { margin: 0 0 14px; }
+  ul, ol { margin: 0 0 14px; padding-inline-start: 22px; }
+  li { margin: 4px 0; }
+  code, .code {
+    font-family: "JetBrains Mono", "Menlo", "Consolas", monospace;
+    direction: ltr;
+    unicode-bidi: embed;
+  }
+  p code, li code, td code {
+    background: #ece9df;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.92em;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-text);
+    padding: 18px 22px;
+    border-radius: 10px;
+    overflow-x: auto;
+    direction: ltr;
+    font-size: 14px;
+    line-height: 1.55;
+    margin: 12px 0 22px;
+  }
+  pre code { background: transparent; padding: 0; color: inherit; }
+  .lead-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-inline-start: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 0 0 28px;
+  }
+  .lead-card p { margin: 0; font-size: 17px; }
+  .file-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 20px 0 8px;
+  }
+  .file {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .file .name {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    direction: ltr;
+    color: var(--accent);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .file h4 { margin-bottom: 4px; }
+  .file p { margin: 4px 0 0; font-size: 15px; line-height: 1.55; }
+  .pipeline-box {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 22px 26px;
+    margin: 18px 0 26px;
+  }
+  .pipeline-row {
+    display: grid;
+    grid-template-columns: 1fr 28px 1fr 28px 1fr 28px 1fr;
+    gap: 8px;
+    align-items: center;
+    margin: 10px 0;
+  }
+  .pipeline-row.three { grid-template-columns: 1fr 28px 1fr 28px 1fr; }
+  .pipe-step {
+    background: #f0eee7;
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+    font-size: 14px;
+  }
+  .pipe-step b { display: block; font-size: 13px; color: var(--accent); font-family: "JetBrains Mono", monospace; }
+  .pipe-step i { font-size: 13px; color: var(--muted); display: block; margin-top: 4px; font-style: normal; }
+  .arrow { text-align: center; color: var(--muted); font-size: 22px; }
+  .step-list {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+  }
+  .step-list li {
+    counter-increment: step;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 56px 14px 20px;
+    margin-bottom: 10px;
+    position: relative;
+  }
+  .step-list li::before {
+    content: counter(step);
+    position: absolute;
+    inset-inline-end: 16px;
+    top: 12px;
+    width: 30px; height: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-family: "JetBrains Mono", monospace;
+  }
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin: 20px 0;
+  }
+  .demo-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .demo-card .site {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--accent);
+    font-size: 14px;
+    font-weight: 700;
+    direction: ltr;
+    display: inline-block;
+  }
+  .demo-card .ok { color: var(--good); font-weight: 700; }
+  .demo-card .partial { color: var(--warn); font-weight: 700; }
+  .gap {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-inline-start: 4px solid var(--warn);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-bottom: 14px;
+  }
+  .gap h3 {
+    margin: 0 0 10px;
+    font-size: 19px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .gap-num {
+    background: var(--warn);
+    color: white;
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .gap-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 8px 18px;
+    font-size: 15px;
+    line-height: 1.6;
+    margin-top: 8px;
+  }
+  .gap-row b { color: var(--muted); font-weight: 600; font-size: 14px; }
+  .pill {
+    display: inline-block;
+    font-size: 12px;
+    padding: 1px 10px;
+    border-radius: 99px;
+    font-weight: 600;
+    margin-inline-start: 8px;
+  }
+  .pill.small  { background: rgba(22, 101, 52, 0.14);  color: var(--good); }
+  .pill.med    { background: rgba(161, 98, 7, 0.16);   color: var(--warn); }
+  .pill.large  { background: rgba(180, 32, 32, 0.14);  color: #991b1b; }
+  .paths {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin: 20px 0 10px;
+  }
+  .path {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 22px;
+  }
+  .path.x { border-top: 4px solid var(--good); }
+  .path.y { border-top: 4px solid var(--accent); }
+  .path h3 { margin-top: 0; }
+  @media (max-width: 760px) {
+    .gap-row { grid-template-columns: 1fr; }
+    .paths { grid-template-columns: 1fr; }
+  }
+  .key {
+    background: linear-gradient(transparent 65%, var(--accent-soft) 65%);
+    font-weight: 600;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0 24px;
+  }
+  th, td {
+    text-align: start;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--line);
+    font-size: 15px;
+  }
+  th { background: #efece2; }
+  td.mono { font-family: "JetBrains Mono", monospace; direction: ltr; }
+  footer {
+    margin-top: 60px;
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  @media (max-width: 760px) {
+    .file-grid, .demo-grid { grid-template-columns: 1fr; }
+    .pipeline-row, .pipeline-row.three { grid-template-columns: 1fr; }
+    .arrow { transform: rotate(90deg); }
+    h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="kicker">Agentify · מדריך לימוד</div>
+  <h1>איך הופכים אתר שלם לכלי AI</h1>
+  <p class="lead">
+    סוכן ה־AI <b>קורא את האתר פעם אחת</b> ומפיק <b>SDK</b> של פונקציות
+    בפורמט JSON. משם והלאה — ה־AI משתמש באתר כאילו יש לו API,
+    בלי לראות פיקסל אחד מהדף.
+  </p>
+</header>
+
+<!-- ============== INTRO ============== -->
+<section>
+  <h2>הבעיה</h2>
+  <p>
+    סוכני AI יודעים לקרוא ל־APIs בצורה מצוינת. הבעיה:
+    <b>רוב האתרים באינטרנט פשוט אין להם API.</b>
+    כדי להזמין משהו, למלא טופס, להוציא נתונים מטבלה — אדם פותח דפדפן,
+    מסתכל בדף, ולוחץ. <span class="key">איך נותנים לסוכן AI לעשות בדיוק את אותו דבר?</span>
+  </p>
+
+  <div class="lead-card">
+    <p>
+      <b>הרעיון:</b> שני שלבים נפרדים. בשלב הראשון (פעם אחת לאתר) סוכן
+      <b>חוקר את האתר ומפיק SDK</b> — קובץ JSON עם רשימת פונקציות. בשלב השני
+      (בכל שימוש), <b>ה־LLM רואה רק את ה־SDK</b> ובוחר פונקציה.
+      <b>מנוע דטרמיניסטי</b> מבצע את המתכון בלי שום קריאת LLM נוספת.
+    </p>
+  </div>
+
+  <p>
+    זו הגישה שמייצרת <b>SDK שנוצר אוטומטית</b>, להבדיל מסוכן שמתבונן על האתר
+    בכל הפעלה. היתרונות: מהירות, עלות נמוכה, החזרה דטרמיניסטית של אותו רצף.
+    החיסרון: צריך מיפוי ראשוני; אם האתר משתנה מהותית — צריך למפות מחדש.
+  </p>
+</section>
+
+<!-- ============== PIPELINE OVERVIEW ============== -->
+<section>
+  <h2>שני השלבים</h2>
+
+  <h3>שלב 1 — מיפוי (פעם אחת לאתר)</h3>
+  <div class="pipeline-box">
+    <div class="pipeline-row">
+      <div class="pipe-step">
+        <b>Crawler</b>
+        סורק עמודים
+        <i>landing + ניווט</i>
+      </div>
+      <div class="arrow">‹</div>
+      <div class="pipe-step">
+        <b>Proposer</b>
+        LLM מציע כלים
+        <i>שם + פרמטרים</i>
+      </div>
+      <div class="arrow">‹</div>
+      <div class="pipe-step">
+        <b>Approver</b>
+        אישור המשתמש
+        <i>ב־CLI</i>
+      </div>
+      <div class="arrow">‹</div>
+      <div class="pipe-step">
+        <b>Recorder</b>
+        הקלטת מתכון
+        <i>לכל כלי שאושר</i>
+      </div>
+    </div>
+    <p style="margin-top:14px; font-size:15px; color: var(--muted);">
+      התוצר: קובץ <code>recipes/&lt;slug&gt;.tools.json</code> — ה־SDK של האתר.
+    </p>
+  </div>
+
+  <h3>שלב 2 — שימוש (בכל הפעלה)</h3>
+  <div class="pipeline-box">
+    <div class="pipeline-row three">
+      <div class="pipe-step">
+        <b>Registry</b>
+        טוען את הקובץ
+        <i>SDK מהדיסק</i>
+      </div>
+      <div class="arrow">‹</div>
+      <div class="pipe-step">
+        <b>Picker</b> (LLM)
+        בוחר כלי + ארגומנטים
+        <i>לא רואה את הדף!</i>
+      </div>
+      <div class="arrow">‹</div>
+      <div class="pipe-step">
+        <b>Engine</b>
+        מבצע דטרמיניסטית
+        <i>בלי LLM</i>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============== HOW MAPPING WORKS ============== -->
+<section>
+  <h2>איך המיפוי עובד בפועל</h2>
+
+  <ol class="step-list">
+    <li>
+      <h4>Crawler — סריקת האתר</h4>
+      <p>
+        פותח דפדפן (Playwright), מגיע ל־URL ההתחלתי. בכל עמוד מזריק JS שמסמן
+        כל אלמנט אינטראקטיבי בתכונה <code>data-w2a-id</code>, ומחזיר רשימה
+        ממוספרת של רכיבים גלויים + קטע טקסט. עוקב אחרי עד 4 קישורי ניווט
+        מאותו origin, ועדיפות לקישורים שנראים כמו עמודי פעולה (Contact, Search...).
+      </p>
+    </li>
+    <li>
+      <h4>Proposer — LLM מציע כלים</h4>
+      <p>
+        שולח את הסקר ל־<code>gpt-5.4-mini</code> עם system prompt שמבקש להציע
+        1–4 כלים. המודל מחזיר JSON עם שם (snake_case), תיאור,
+        <code>tool_type</code> (<code>action</code> או <code>extract</code>),
+        ו־<b>JSON Schema</b> של הפרמטרים. שמות הפרמטרים נגזרים משדות שהמודל
+        ראה בעמוד (Name, Email, ...).
+      </p>
+    </li>
+    <li>
+      <h4>Approver — אישור משתמש</h4>
+      <p>
+        מציג את ההצעות בטרמינל. המשתמש יכול לאשר את הכול
+        (<code>Enter</code> / <code>--auto-approve</code>), לבחור תתי־קבוצה
+        לפי מספרי אינדקס, או לדחות. כלים שלא אושרו לא ייכנסו ל־SDK.
+      </p>
+    </li>
+    <li>
+      <h4>Recorder — הקלטת מתכון לכל כלי</h4>
+      <p>
+        עבור כל כלי שאושר:
+      </p>
+      <ul>
+        <li>
+          <b>כלי action</b> (טופס, לחיצה): נוצר ערך־סנטינל לכל פרמטר —
+          <code>__W2A_NAME__</code>, <code>__W2A_EMAIL__</code>...
+          ה־RecordingBrowser (תת־מחלקה של Browser) רץ דרך הדפדפן ומבצע את
+          הפעולות. כשהוא מזהה סנטינל בערך שנכתב — הוא מחליף אותו חזרה ל־
+          <code>{{name}}</code> במתכון. תפקיד+שם נשמרים כמו גם CSS גיבוי.
+        </li>
+        <li>
+          <b>כלי extract</b> (קריאת נתונים): שאילתה נפרדת ל־LLM שמייצרת
+          ביטוי <code>page.evaluate(...)</code> שמחזיר JSON מובנה.
+          המתכון הסופי הוא <code>goto → wait → js_extract</code>.
+        </li>
+      </ul>
+    </li>
+  </ol>
+</section>
+
+<!-- ============== RECIPE FORMAT ============== -->
+<section>
+  <h2>איך נראה מתכון בפועל</h2>
+  <p>
+    קובץ JSON שמכיל לכל כלי: שם, תיאור, סכמת פרמטרים (JSON Schema),
+    ורצף פעולות אטומיות. <code>{{name}}</code> הוא תחליף לפרמטר שמוזרק בזמן ההפעלה.
+  </p>
+<pre><code>{
+  "name": "submit_contact_form",
+  "description": "שולח טופס יצירת קשר",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "name":  {"type": "string"},
+      "email": {"type": "string"}
+    },
+    "required": ["name", "email"]
+  },
+  "steps": [
+    {"op": "goto",   "url": "https://example.com/#contact"},
+    {"op": "type",   "target": {"role": "textbox", "name": "Name *"},
+                     "text": "{{name}}"},
+    {"op": "type",   "target": {"role": "textbox", "name": "Email *"},
+                     "text": "{{email}}"},
+    {"op": "click",  "target": {"role": "button", "name": "Send"}},
+    {"op": "wait",   "ms": 1500},
+    {"op": "verify", "kind": "page_text_contains", "value": "thanks"}
+  ]
+}</code></pre>
+
+  <h3>אוצר המילים של ה־Engine</h3>
+  <p>10 אופרציות, כולן דטרמיניסטיות, ללא LLM:</p>
+  <table>
+    <thead><tr><th>op</th><th>תפקיד</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">goto</td><td>ניווט ל־URL</td></tr>
+      <tr><td class="mono">click</td><td>לחיצה על Target</td></tr>
+      <tr><td class="mono">type</td><td>מילוי שדה טקסט (תומך ב־<code>{{param}}</code>)</td></tr>
+      <tr><td class="mono">select</td><td>בחירה ב־combobox</td></tr>
+      <tr><td class="mono">press_enter</td><td>הקשת Enter</td></tr>
+      <tr><td class="mono">scroll</td><td>גלילה (up / down / top / bottom)</td></tr>
+      <tr><td class="mono">wait</td><td>השהיה במילישניות</td></tr>
+      <tr><td class="mono">extract</td><td>קריאת text / value / attribute מאלמנט</td></tr>
+      <tr><td class="mono">js_extract</td><td>הרצת JS מותאם לחילוץ ערכים מורכבים</td></tr>
+      <tr><td class="mono">verify</td><td>אימות מצב; כשל ⇒ <code>RecipeFailure</code></td></tr>
+    </tbody>
+  </table>
+
+  <h3>איך Target שורד שינויי DOM</h3>
+  <p>
+    כל יעד נשמר עם עד שלוש אסטרטגיות. ה־Engine מנסה אותן לפי סדר עדיפויות
+    עד שאחת תופסת:
+  </p>
+  <ol>
+    <li><b>role + name</b> — דרך עץ הנגישות (ARIA). הכי יציב.</li>
+    <li><b>css</b> — נוצר במיפוי מ־<code>id</code>, <code>name</code>, <code>data-testid</code> או מיקום־בתוך־הורה.</li>
+    <li><b>text</b> — חיפוש טקסט גלוי.</li>
+  </ol>
+</section>
+
+<!-- ============== FILE BREAKDOWN ============== -->
+<section>
+  <h2>הקבצים — מי עושה מה</h2>
+  <p>
+    11 קבצי פייתון, כל אחד אחראי על נושא אחד.
+  </p>
+
+  <h3>שכבת הדפדפן והתפיסה</h3>
+  <div class="file-grid">
+    <div class="file">
+      <div class="name">browser.py</div>
+      <h4>עוטף Playwright</h4>
+      <p>
+        פותח/סוגר דפדפן Chromium, מנווט, ומבצע פעולות
+        (<code>click</code>, <code>type_text</code>,
+        <code>select_option</code>, <code>scroll</code>, <code>wait</code>).
+        כל פעולה מקבלת <b>מזהה אלמנט</b> ולא סלקטור גולמי.
+      </p>
+    </div>
+    <div class="file">
+      <div class="name">ax_tree.py</div>
+      <h4>הזרקת JS לבניית רשימת רכיבים</h4>
+      <p>
+        מזריק קוד JS לדף שמסמן כל אלמנט אינטראקטיבי גלוי בתכונה
+        <code>data-w2a-id</code>, מסיק תפקיד (role) ושם נגישות, ומחזיר רשימה
+        ממוספרת + קטע טקסט מהדף.
+      </p>
+    </div>
+    <div class="file">
+      <div class="name">selectors.py</div>
+      <h4>סלקטורים יציבים למתכונים</h4>
+      <p>
+        <code>Target = {role, name, css, text}</code>. בזמן הקלטה — לוכד את
+        כל האסטרטגיות; בזמן הרצה — מנסה לפי סדר עדיפויות עד שמשהו תופס.
+      </p>
+    </div>
+  </div>
+
+  <h3>שכבת ה־SDK ומנוע הביצוע</h3>
+  <div class="file-grid">
+    <div class="file">
+      <div class="name">recipe.py</div>
+      <h4>Recipe + Engine (דטרמיניסטי)</h4>
+      <p>
+        <code>Recipe</code> = dataclass עם שם, תיאור, פרמטרים, וצעדים.
+        <code>Engine.execute(recipe, args, browser)</code> מחליף
+        <code>{{param}}</code> בכל שדה מחרוזת ומבצע כל op. כשל ⇒
+        <code>RecipeFailure</code> עם אינדקס הצעד והסיבה.
+      </p>
+    </div>
+    <div class="file">
+      <div class="name">registry.py</div>
+      <h4>קריאה וכתיבה של SDK־לאתר</h4>
+      <p>
+        <code>load(slug)</code> / <code>save(registry)</code> ל־
+        <code>recipes/&lt;slug&gt;.tools.json</code>. כולל
+        <code>to_openai_tools()</code> שממיר לסכמת function calling של OpenAI.
+      </p>
+    </div>
+  </div>
+
+  <h3>שכבת המיפוי (Phase 1)</h3>
+  <div class="file-grid">
+    <div class="file">
+      <div class="name">mapper.py</div>
+      <h4>הצינור המלא של המיפוי</h4>
+      <p>
+        ארבעה שלבים בקובץ אחד: <b>Crawler</b> סורק עמודים →
+        <b>Proposer</b> שולח ל־LLM ומקבל הצעות כלים →
+        <b>Approver</b> מציג ב־CLI לאישור →
+        <b>Recorder</b> מקליט מתכון לכל כלי שאושר.
+      </p>
+    </div>
+    <div class="file">
+      <div class="name">recorder.py</div>
+      <h4>דפדפן שמקליט את עצמו</h4>
+      <p>
+        תת־מחלקה של <code>Browser</code>. בכל פעולה — קודם לוכד את ה־Target
+        ואת ה־text, ואז מבצע. ממיר ערכי־סנטינל
+        (<code>__W2A_NAME__</code>) חזרה ל־<code>{{name}}</code>.
+      </p>
+    </div>
+  </div>
+
+  <h3>שכבת ה־LLM וה־CLI</h3>
+  <div class="file-grid">
+    <div class="file">
+      <div class="name">llm.py</div>
+      <h4>לקוח OpenAI + פרומפטים + סכמת כלים</h4>
+      <p>
+        קליינט OpenAI. משמש את ה־Proposer (להציע כלים), את ה־Recorder
+        (כדי להעביר משימה סינתטית לדפדפן בזמן ההקלטה), ואת ה־Picker
+        בזמן <code>run-mapped</code> (לבחור איזה כלי לקרוא).
+      </p>
+    </div>
+    <div class="file">
+      <div class="name">cli.py</div>
+      <h4>פקודות Typer</h4>
+      <p>
+        3 פקודות בלבד: <code>map</code> (מייצר SDK),
+        <code>call</code> (קריאה ישירה לכלי בלי LLM),
+        ו־<code>run-mapped</code> (LLM בוחר כלי ממשימה בשפה טבעית).
+      </p>
+    </div>
+    <div class="file">
+      <div class="name">agent.py</div>
+      <h4>לולאה פנימית של ה־Recorder</h4>
+      <p>
+        משמש את ה־Recorder כדי "להדגים" לדפדפן איך לבצע את הכלי
+        שמוקלט. לא נחשף כפקודה ב־CLI — קוד תשתית.
+      </p>
+    </div>
+    <div class="file">
+      <div class="name">memory.py</div>
+      <h4>זיכרון פנימי</h4>
+      <p>
+        היסטוריה מתגלגלת של צעדים ובדיקת חזרתיות, בשימוש הלולאה הפנימית.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== COMMANDS ============== -->
+<section>
+  <h2>איך מפעילים את זה</h2>
+
+  <h3>התקנה</h3>
+<pre><code>python -m venv .venv && source .venv/bin/activate
+pip install -e .
+playwright install chromium
+cp .env.example .env   # OPENAI_API_KEY=...</code></pre>
+
+  <h3>שלב 1: מיפוי האתר</h3>
+<pre><code>agentify map --url https://news.ycombinator.com --name hackernews
+# כותב recipes/hackernews.tools.json
+
+# אם לא רוצים אישור אינטראקטיבי:
+agentify map --url https://news.ycombinator.com --name hackernews --auto-approve</code></pre>
+
+  <h3>שלב 2: שימוש</h3>
+<pre><code># קריאה ישירה לכלי, בלי LLM בכלל:
+agentify call --site hackernews --tool get_top_stories --args '{"n": 5}'
+
+# משימה בשפה טבעית — LLM בוחר כלי, לא רואה את הדף:
+agentify run-mapped --site hackernews \
+  --task "Give me the top 3 stories right now"</code></pre>
+</section>
+
+<!-- ============== DEMOS ============== -->
+<section>
+  <h2>הדגמות שעבדו</h2>
+  <div class="demo-grid">
+    <div class="demo-card">
+      <div class="site">httpbin</div>
+      <h4>הזמנת פיצה עם כל הפרמטרים</h4>
+      <p>
+        משימה בשפה טבעית: "הזמן פיצה קטנה ל־Jane Doe ב־18:30". ה־LLM קרא
+        ל־<code>submit_order(pizza_size="small", ...)</code>; ה־Engine מילא
+        את הטופס ושלח. <span class="ok">עבד מלא.</span>
+      </p>
+    </div>
+    <div class="demo-card">
+      <div class="site">yairtech.co.uk</div>
+      <h4>חילוץ שירותים ומחירים</h4>
+      <p>
+        ה־LLM קרא ל־<code>get_services(n=3)</code> וקיבל בחזרה JSON עם שם
+        השירות, לוח זמנים, ותמחיר. <span class="ok">עבד מלא.</span>
+      </p>
+    </div>
+    <div class="demo-card">
+      <div class="site">news.ycombinator.com</div>
+      <h4>3 הסיפורים החמים</h4>
+      <p>
+        <code>get_top_stories(n=3)</code> מחזיר רשימה מובנית: כותרת, URL,
+        מקור, ניקוד, מחבר, מספר תגובות. <span class="ok">עבד מלא.</span>
+      </p>
+    </div>
+    <div class="demo-card">
+      <div class="site">en.wikipedia.org</div>
+      <h4>חיפוש (חלקית)</h4>
+      <p>
+        <code>search_wikipedia(query="Claude Shannon")</code> מנווט לעמוד
+        החיפוש, אבל אין כלי שמחזיר עובדות מהמאמר —
+        ה־Proposer ראה רק את העמוד הראשי במהלך הסריקה. <span class="partial">חלקית.</span>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============== LIMITATIONS ============== -->
+<section>
+  <h2>מה לא מטופל ואיך להרחיב</h2>
+  <p>
+    המערכת הנוכחית עובדת מצוין על <b>טפסים של עמוד אחד</b> ו־<b>חילוץ נתונים
+    מעמוד אחד</b>. אחרי שהבנתם איך זה עובד — אלו חמש הנקודות שבהן זה
+    נשבר, וכל אחת עם התיקון הקונקרטי שצריך:
+  </p>
+
+  <div class="gap">
+    <h3>
+      <span class="gap-num">1</span>
+      אין הימשכות של session בין קריאות
+      <span class="pill small">קטן</span>
+    </h3>
+    <div class="gap-row">
+      <b>מה חסר</b>
+      <span>
+        כל <code>agentify call</code> פותח דפדפן חדש ונסגר בסוף. עוגיות
+        לא שורדות בין קריאות.
+      </span>
+      <b>למה זה חשוב</b>
+      <span>
+        כל זרימה שדורשת התחברות חסומה. <code>login(...)</code> ואז
+        <code>view_cart()</code> פשוט לא יעבוד — הקריאה השנייה היא דפדפן
+        חדש, לא מחובר.
+      </span>
+      <b>איך לתקן</b>
+      <span>
+        להוסיף מחלקת <code>Session</code> ל־<code>browser.py</code> ששומרת
+        <code>BrowserContext</code> חי בין קריאות, עם דגל
+        <code>--session &lt;id&gt;</code> ב־CLI.
+        <code>run-mapped</code> כבר רץ בקונטקסט אחד — רק <code>call</code>
+        סובל מהבעיה.
+      </span>
+    </div>
+  </div>
+
+  <div class="gap">
+    <h3>
+      <span class="gap-num">2</span>
+      אין אופ של איטרציה (אין pagination, אין for-each)
+      <span class="pill med">בינוני</span>
+    </h3>
+    <div class="gap-row">
+      <b>מה חסר</b>
+      <span>
+        מתכונים הם רצפים ישרים. אי אפשר להגיד "לכל סיפור ברשימה — תלחץ
+        ותחלץ X". כדי לדפדף 5 עמודי HN צריך 5 מתכונים נפרדים.
+      </span>
+      <b>למה זה חשוב</b>
+      <span>
+        scraping, batch processing, "תראה לי את כל..." — כל משימה
+        איטרטיבית.
+      </span>
+      <b>איך לתקן</b>
+      <span>
+        להוסיף op בשם <code>for_each {items_target, sub_steps}</code> ל־
+        <code>recipe.py</code>. ה־Engine מבצע
+        <code>page.locator(items_target).all()</code> ומריץ את הצעדים
+        הפנימיים עם משתנה <code>{{_item}}</code> פעיל.
+      </span>
+    </div>
+  </div>
+
+  <div class="gap">
+    <h3>
+      <span class="gap-num">3</span>
+      אין הסתעפות (<code>if_verify</code>)
+      <span class="pill med">בינוני</span>
+    </h3>
+    <div class="gap-row">
+      <b>מה חסר</b>
+      <span>
+        <code>verify</code> רק עובר או נופל ב־<code>RecipeFailure</code>.
+        אין "אם העגלה ריקה לך לקטלוג, אחרת לקופה".
+      </span>
+      <b>למה זה חשוב</b>
+      <span>
+        כל אתר עם מודלים, זרימות אופציונליות, הודעות אימות שצריך להגיב
+        אליהן. ה־LLM יכול להחליט ברמה גבוהה, אבל לא הגיוני להעלות אליו כל
+        מיני "האם יש פה כפתור Close או Cancel".
+      </span>
+      <b>איך לתקן</b>
+      <span>
+        להוסיף op בשם
+        <code>if_verify {kind, value, then: [...], else: [...]}</code>
+        ל־Engine ב־<code>recipe.py</code>. אם ה־verify עובר — להריץ את
+        ה־<code>then</code>; אחרת את ה־<code>else</code>.
+      </span>
+    </div>
+  </div>
+
+  <div class="gap">
+    <h3>
+      <span class="gap-num">4</span>
+      Crawler רדוד → הצעות כלים רדודות
+      <span class="pill large">בינוני-גדול</span>
+    </h3>
+    <div class="gap-row">
+      <b>מה חסר</b>
+      <span>
+        ה־<code>Crawler</code> ב־<code>mapper.py</code> רואה רק את עמוד
+        הבית + עד ארבעה קישורי ניווט. עמודים מאחורי login, תוצאות חיפוש,
+        wizard רב־שלבי או modals — בלתי נראים ל־Proposer.
+      </span>
+      <b>למה זה חשוב</b>
+      <span>
+        ה־Proposer הוא הצוואר הצר. בדיוק בגלל זה Wikipedia קיבל
+        <code>search_wikipedia</code> אבל לא <code>get_article_facts(query)</code> —
+        ה־Crawler מעולם לא ביקר במאמר.
+      </span>
+      <b>איך לתקן</b>
+      <span>
+        להפוך את ה־Crawler לסוכן בעצמו: למלא טפסים, ללחוץ על תפריטים,
+        ולתעד מצב בכל שכבה. הופך לרקורסיבי ומצבי — וייתכן שצריך fixture
+        של login.
+      </span>
+    </div>
+  </div>
+
+  <div class="gap">
+    <h3>
+      <span class="gap-num">5</span>
+      קישור פרמטרים נכשל על פעולות לא־טקסט
+      <span class="pill med">בינוני</span>
+    </h3>
+    <div class="gap-row">
+      <b>מה חסר</b>
+      <span>
+        כשה־Recorder רואה <code>type_text(id=4, text="__W2A_EMAIL__")</code>
+        הוא יודע להחליף ל־<code>{{email}}</code>. אבל בלחיצה על radio,
+        checkbox, date-picker או file-upload — אין טקסט מוקלד, אין סנטינל,
+        אין למה להיתלות.
+      </span>
+      <b>למה זה חשוב</b>
+      <span>
+        זה בדיוק מה שקרה ב־httpbin: <code>pizza_size</code> "נצרב" ל־"Small"
+        במקום ל־<code>{{pizza_size}}</code>. כל טופס עם enum/select/radio
+        מקבל פרמטרים חצי־פעילים.
+      </span>
+      <b>איך לתקן</b>
+      <span>
+        ה־Mapper צריך לעקוב איזה slot של placeholder "פעיל" כשפעולה
+        לא־טקסטואלית נורית. להעביר ל־Agent את שמות הפרמטרים יחד עם
+        ה־placeholders, ולבקש שיבחר אופציה שהטקסט הגלוי שלה מתאים. אחר־כך
+        ה־Recorder מתאים role+name+value מול מפת ה־placeholders.
+      </span>
+    </div>
+  </div>
+
+  <h3>איזה כיוון לבחור?</h3>
+  <p>
+    החלטה ארכיטקטונית אחת כשמרחיבים: <b>האם המתכון רצף שטוח או שפה
+    קטנה?</b>
+  </p>
+
+  <div class="paths">
+    <div class="path x">
+      <h4>מסלול X</h4>
+      <h3>מתכונים שטוחים, מורכבות אצל ה־LLM</h3>
+      <p>
+        להוסיף <code>Session</code> ולתקן את param binding. כל כלי נשאר
+        פעולה אטומית קטנה (<code>login</code>, <code>view_cart</code>,
+        <code>checkout_step_1</code>...). ה־LLM בזמן ריצה מרכיב ביניהם.
+      </p>
+      <p style="font-size:14px; color: var(--muted);">
+        <b>טוב:</b> פשוט, צפוי, קל לתחזק. <b>פחות טוב:</b> יותר קריאות LLM.
+      </p>
+    </div>
+    <div class="path y">
+      <h4>מסלול Y</h4>
+      <h3>מתכונים כשפה קטנה</h3>
+      <p>
+        להוסיף <code>for_each</code>, <code>if_verify</code>, ו־
+        <code>subcall</code> ל־Engine. כלי אחד יכול להגיד "התחבר אם צריך,
+        עבור N עמודים, חלץ הכל, החזר".
+      </p>
+      <p style="font-size:14px; color: var(--muted);">
+        <b>טוב:</b> כלים חזקים, LLM רק בוחר ברמה גבוהה. <b>פחות טוב:</b>
+        ה־Engine הופך למפרש קטן, יש יותר מה לבדוק וללמד.
+      </p>
+    </div>
+  </div>
+
+  <p style="margin-top: 18px;">
+    <b>סדר מעשי לקוד הזה:</b> קודם (1) ו־(5) — קטנים, ערכם גבוה, פותחים
+    80% מהמקרים האמיתיים של מולטי־עמוד. אחר־כך (2) רק כשמשימה אמיתית
+    דורשת pagination. (3) ו־(4) לדחות עד שתגיעו לקיר.
+  </p>
+</section>
+
+
+<!-- ============== TAKEAWAYS ============== -->
+<section>
+  <h2>מסקנות חשובות שכדאי ללמד</h2>
+  <ul>
+    <li>
+      <b>אינטראקציה ≠ ידע על הדף.</b> בזמן הריצה, ה־LLM פותר את המשימה בלי
+      לראות אפילו פיקסל אחד מהאתר. רק שמות פונקציות וסכמת ארגומנטים.
+    </li>
+    <li>
+      <b>המתכון הוא חוזה.</b> JSON עם 10 אופ־קודים. אם האתר משתנה,
+      ה־<code>verify</code> נכשל ב־<code>RecipeFailure</code> שצועק "תמפה
+      מחדש" — לא דועך בשקט.
+    </li>
+    <li>
+      <b>ה־AI מייצר את ה־SDK של עצמו.</b> שורת ההדגמה: "הסוכן קורא את האתר
+      פעם אחת, מפיק את ה־SDK שלו, ומשם משתמש באתר כמו ב־API."
+    </li>
+    <li>
+      <b>שני סוגי כלים, שתי דרכי הקלטה.</b> כלי <code>action</code> מוקלטים
+      על־ידי הדגמה דרך דפדפן וערכי סנטינל; כלי <code>extract</code>
+      מקבלים ביטוי JS שנוצר על־ידי LLM. שניהם מתאחדים לאותו פורמט מתכון.
+    </li>
+  </ul>
+</section>
+
+<footer>
+  Agentify · גירסה 0.1.0 · 21/21 טסטים עוברים · ארבעה SDKs ממופים · נכתב לאתגר Agentify
+</footer>
+
+</body>
+</html>
