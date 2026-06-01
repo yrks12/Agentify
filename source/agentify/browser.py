@@ -31,14 +31,27 @@ class Browser:
 
     def start(self) -> None:
         self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=self._headless)
+        self._browser = self._pw.chromium.launch(
+            headless=self._headless,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
         self._context = self._browser.new_context(
             viewport={"width": self._viewport[0], "height": self._viewport[1]},
+            locale="en-US",
+            extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/124.0 Safari/537.36"
             ),
+        )
+        # Hide the most obvious headless/automation tells before any page JS
+        # runs. Sites like eBay gate on navigator.webdriver and an empty
+        # plugins/languages list and serve an error page to bots otherwise.
+        self._context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+            "Object.defineProperty(navigator, 'languages', {get: () => ['en-US','en']});"
+            "Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]});"
         )
         self.page = self._context.new_page()
 
