@@ -46,8 +46,11 @@ def _substitute(value: Any, args: dict) -> Any:
     if isinstance(value, str):
         def repl(m: re.Match) -> str:
             key = m.group(1)
-            if key not in args:
-                return m.group(0)
+            if key not in args or args[key] is None:
+                # Optional param omitted: resolve to empty rather than leaving
+                # the literal "{{param}}", which would otherwise be typed into
+                # fields or passed to select_option as a bogus option value.
+                return ""
             return str(args[key])
         return _PARAM_RE.sub(repl, value)
     if isinstance(value, list):
@@ -81,6 +84,18 @@ class Engine:
                     # Scale down wait times by a factor of 5 (e.g. 1000ms -> 200ms) for speed, with 50ms min
                     scaled_ms = max(50, int(ms * 0.2)) if ms > 0 else 0
                     self.browser.wait(scaled_ms)
+                elif op == "wait_for":
+                    # Wait for a selector to appear — robust against variable
+                    # render/network time, unlike the scaled fixed `wait`.
+                    # Swallows timeout so extraction can still run on partial pages.
+                    sel = step.get("selector")
+                    if sel:
+                        try:
+                            self.browser.page.wait_for_selector(
+                                sel, timeout=int(step.get("ms", 8000))
+                            )
+                        except Exception:
+                            pass
                 elif op == "scroll":
                     self.browser.scroll(step.get("direction", "down"))
                 elif op == "click":
@@ -88,9 +103,14 @@ class Engine:
                     loc.scroll_into_view_if_needed(timeout=2000)
                     loc.click(timeout=4000)
                 elif op == "type":
+                    text = step.get("text", "")
+                    # An optional param that resolved to empty leaves nothing to
+                    # type — skip rather than clobbering any default field value.
+                    if text == "" and not step.get("press_enter"):
+                        continue
                     loc = resolve(self.browser.page, Target.from_dict(step["target"]))
                     loc.scroll_into_view_if_needed(timeout=2000)
-                    loc.fill(step.get("text", ""), timeout=4000)
+                    loc.fill(text, timeout=4000)
                     if step.get("press_enter"):
                         loc.press("Enter")
                 elif op == "press_enter":
@@ -107,8 +127,12 @@ class Engine:
                     else:
                         self.browser.press_key(key)
                 elif op == "select":
-                    loc = resolve(self.browser.page, Target.from_dict(step["target"]))
                     value = step.get("value", "")
+                    # Optional category/filter omitted -> empty value. Skip so
+                    # the recipe falls back to the control's default selection.
+                    if value == "":
+                        continue
+                    loc = resolve(self.browser.page, Target.from_dict(step["target"]))
                     try:
                         loc.select_option(value=value, timeout=2000)
                     except Exception:
