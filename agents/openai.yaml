@@ -1,0 +1,16 @@
+# Codex-specific metadata for the Agentify skill.
+#
+# OPTIONAL — Codex runs this skill from SKILL.md alone; this file only adds
+# app/UI polish and makes the invocation policy explicit. Claude Code ignores it.
+# Spec: https://developers.openai.com/codex/skills
+interface:
+  display_name: "Agentify"
+  short_description: "Turn any website into an LLM-callable API — record deterministic Playwright recipes once, then call them as tools without the model ever seeing the page."
+  brand_color: "#10A37F"
+
+policy:
+  # Let Codex select Agentify automatically when a task matches the SKILL.md
+  # description (scrape / automate / expose a website as tools). This is already
+  # the default; stated here so the behavior is explicit. Explicit `$Agentify`
+  # invocation works regardless.
+  allow_implicit_invocation: true
