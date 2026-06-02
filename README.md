@@ -11,13 +11,51 @@ execution, no fragile prompting.
 
 Built on Python + Playwright + OpenAI `gpt-5.4-mini`.
 
-## Quickstart
+Agentify is an [Agent Skill](https://developers.openai.com/codex/skills) — the
+single `SKILL.md` works in **both Claude Code and Codex** (and any tool that
+reads the open SKILL.md standard). Only the install folder differs.
+
+## Install
+
+The skill bundles a Python venv + Playwright Chromium, so installing is: clone
+into your tool's skills directory, then build the bundled environment. Paste the
+matching prompt to your agent and it will do all of it for you.
+
+### Claude Code
+
+> Install the Agentify skill from `https://github.com/rivka2003/Agentify`.
+> 1. `git clone https://github.com/rivka2003/Agentify ~/.claude/skills/Agentify`
+> 2. `cd ~/.claude/skills/Agentify`
+> 3. `python3 -m venv venv`
+> 4. `venv/bin/pip install -e source`
+> 5. `venv/bin/python -m playwright install chromium`
+> 6. `cp source/.env.example source/.env` and set `OPENAI_API_KEY=` to my key.
+>
+> Then confirm the **Agentify** skill loads (`/skills`).
+
+### Codex
+
+> Install the Agentify skill from `https://github.com/rivka2003/Agentify`.
+> 1. `git clone https://github.com/rivka2003/Agentify ~/.agents/skills/Agentify`
+> 2. `cd ~/.agents/skills/Agentify`
+> 3. `python3 -m venv venv`
+> 4. `venv/bin/pip install -e source`
+> 5. `venv/bin/python -m playwright install chromium`
+> 6. `cp source/.env.example source/.env` and set `OPENAI_API_KEY=` to my key.
+>
+> Then confirm the **Agentify** skill loads (`/skills`).
+
+The only difference is the target directory: Claude Code discovers skills in
+`~/.claude/skills/`, Codex in `~/.agents/skills/`. The `SKILL.md` itself is
+identical and path-independent (it resolves the install folder via `$SKILL_DIR`).
+
+## Manual / dev setup
 
 ```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e .
+python -m venv venv && source venv/bin/activate
+pip install -e source
 playwright install chromium
-cp .env.example .env   # OPENAI_API_KEY=...
+cp source/.env.example source/.env   # OPENAI_API_KEY=...
 ```
 
 ### Phase 1 — generate an SDK for a site
@@ -287,8 +325,8 @@ you've hit a wall with the simpler path.
 ## Tests
 
 ```bash
-pip install -e ".[dev]"
-pytest          # 21 tests, no Playwright / OpenAI needed
+pip install -e "source[dev]"
+pytest source   # 21 tests, no Playwright / OpenAI needed
 ```
 
 ## Configuration
