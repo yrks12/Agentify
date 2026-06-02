@@ -1,6 +1,5 @@
 """Registry JSON roundtrip + OpenAI tool conversion."""
 
-from pathlib import Path
 
 from agentify.recipe import Recipe
 from agentify.registry import (

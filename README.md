@@ -314,19 +314,21 @@ small, high-value, and unlock most real multi-page cases. Add (2) only
 when a concrete pagination task demands it. Defer (3) and (4) until
 you've hit a wall with the simpler path.
 
-## Generated SDKs in this repo
+## Example recipe
 
-`recipes/`:
-- `httpbin.tools.json` — `submit_order(...)`
-- `hackernews.tools.json` — `get_top_stories`, `open_story`, `open_comments`, `browse_feed`
-- `yairtech.tools.json` — `book_audit`, `get_services`, `list_resources`, `open_chat`
-- `wikipedia.tools.json` — `search_wikipedia`, `log_in`, `create_account`
+Recipes you generate with `agentify map` land in `recipes/` and are
+git-ignored by default (they're yours, and may target private sites). A
+neutral, public-site example ships in [`examples/`](examples/) so you can
+see the format and try a replay without mapping anything first:
+
+- `examples/hackernews.tools.json` — `get_top_stories` over
+  [news.ycombinator.com](https://news.ycombinator.com)
 
 ## Tests
 
 ```bash
 pip install -e "source[dev]"
-pytest source   # 21 tests, no Playwright / OpenAI needed
+pytest source   # hermetic: no Playwright / OpenAI key needed
 ```
 
 ## Configuration
@@ -336,3 +338,13 @@ pytest source   # 21 tests, no Playwright / OpenAI needed
 OPENAI_API_KEY=sk-...
 AGENTIFY_MODEL=gpt-5.4-mini     # any function-calling model
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). By participating you agree to the
+[Code of Conduct](CODE_OF_CONDUCT.md). Security issues: see
+[SECURITY.md](SECURITY.md) — please report privately.
+
+## License
+
+[Apache-2.0](LICENSE). © Agentify contributors.

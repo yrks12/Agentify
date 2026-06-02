@@ -12,7 +12,6 @@ The output is a SiteRegistry written to recipes/<slug>.tools.json.
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import urlparse
@@ -21,9 +20,8 @@ from rich.console import Console
 from rich.panel import Panel
 
 from .agent import Agent
-from .ax_tree import AXElement
 from .browser import Browser
-from .llm import LLM, DEFAULT_MODEL
+from .llm import LLM
 from .recipe import Engine, Recipe, RecipeFailure
 from .recorder import RecordingBrowser
 from .registry import SiteRegistry

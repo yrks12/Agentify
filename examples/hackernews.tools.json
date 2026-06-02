@@ -1,0 +1,29 @@
+{
+  "site": "hackernews",
+  "base_url": "https://news.ycombinator.com/",
+  "tools": [
+    {
+      "name": "top_stories",
+      "description": "Return the current Hacker News front-page stories.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "n": {
+            "type": "integer",
+            "description": "How many stories to return (from the top).",
+            "default": 10
+          }
+        },
+        "required": []
+      },
+      "steps": [
+        { "op": "goto", "url": "https://news.ycombinator.com/" },
+        {
+          "op": "js_extract",
+          "key": "result",
+          "expr": "(args) => Array.from(document.querySelectorAll('tr.athing')).slice(0, args.n ?? 10).map((row) => { const a = row.querySelector('.titleline a'); const sub = row.nextElementSibling; const score = sub && sub.querySelector('.score'); return { title: a ? a.textContent.trim() : '', url: a ? a.href : '', points: score ? score.textContent.trim() : '' }; })"
+        }
+      ]
+    }
+  ]
+}

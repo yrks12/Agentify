@@ -2,7 +2,7 @@
 
 import json as _json
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 from dotenv import load_dotenv

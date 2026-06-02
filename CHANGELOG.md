@@ -1,0 +1,27 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-06-02
+
+Initial public release.
+
+### Added
+- **Map** phase: a mapper agent visits a site, proposes tool functions, and
+  records each as a deterministic Playwright recipe in `recipes/<slug>.tools.json`.
+- **Run** phase: a pure-replay engine executes a recorded recipe; an LLM picks
+  a tool from the JSON schema without ever seeing the page.
+- `agentify` CLI (`map`, `run`, `call`, `list`).
+- `SKILL.md` working in both Claude Code and Codex, plus optional native
+  `agents/openai.yaml` metadata for Codex.
+- Bundled Python venv + Playwright Chromium for one-step install.
+- Test suite (hermetic: no network, Playwright, or OpenAI key required).
+- Example recipe under `examples/`.
+
+[Unreleased]: https://github.com/rivka2003/Agentify/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/rivka2003/Agentify/releases/tag/v0.1.0

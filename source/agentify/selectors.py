@@ -8,6 +8,7 @@ recipes survive small DOM tweaks.
 
 from __future__ import annotations
 
+import time
 from dataclasses import asdict, dataclass
 from typing import Optional
 
@@ -33,8 +34,6 @@ class Target:
             text=d.get("text"),
         )
 
-
-import time
 
 def resolve(page: Page, target: Target, timeout_ms: int = 3000) -> Locator:
     """Pick a Locator for target. Tries strategies in priority order, polling until one is found or timeout."""

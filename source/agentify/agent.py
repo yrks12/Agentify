@@ -1,6 +1,6 @@
 """The observe -> think -> act loop."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from .browser import Browser, Observation

@@ -1,7 +1,6 @@
 """Recipe Engine tests with a fake Browser. No Playwright, no network."""
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from agentify.recipe import Engine, Recipe, RecipeFailure
 
