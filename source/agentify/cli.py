@@ -2,7 +2,7 @@
 
 import json as _json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Optional
 
 import typer
 from dotenv import load_dotenv
@@ -15,6 +15,7 @@ from .browser import Browser
 from .llm import DEFAULT_MODEL, LLM
 from .mapper import map_site
 from .recipe import Engine, RecipeFailure
+from .session import ensure_authenticated, manual_bootstrap
 
 app = typer.Typer(
     add_completion=False,
@@ -60,6 +61,10 @@ def call(
     tool: Annotated[str, typer.Option("--tool", help="Tool name.")],
     args: Annotated[str, typer.Option("--args", help="JSON args.")] = "{}",
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", help="Reuse/refresh a saved login under sessions/<name>.json."),
+    ] = None,
 ) -> None:
     """Phase 2 (direct): execute one mapped tool with explicit args. No LLM."""
     _load_env()
@@ -78,13 +83,25 @@ def call(
     _console.rule(f"[bold cyan]call {site}.{tool}")
     _console.print(Panel(_json.dumps(parsed_args, indent=2), title="args", border_style="dim"))
 
-    with Browser(headless=headless) as browser:
+    session_file = registry_mod.session_path(session) if session else None
+    with Browser(headless=headless, storage_state=session_file) as browser:
+        if session_file is not None and reg.auth:
+            status = ensure_authenticated(browser, reg, session_file=session_file)
+            _console.print(f"[cyan]session:[/] {status}")
+            if not status.authenticated:
+                _console.print("[red]could not authenticate; aborting.[/]")
+                raise typer.Exit(code=1)
+
         engine = Engine(browser)
         try:
             result = engine.execute(recipe, parsed_args)
         except RecipeFailure as e:
             _console.print(f"[red]RecipeFailure at step {e.step_index}: {e.reason}[/]")
             raise typer.Exit(code=1)
+
+        # Persist any session changes (cookies rotate / refresh during the call).
+        if session_file is not None:
+            browser.save_storage_state(session_file)
 
     _console.print(
         Panel(
@@ -110,6 +127,10 @@ def run_mapped(
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
     max_calls: Annotated[int, typer.Option("--max-calls")] = 5,
     model: Annotated[str, typer.Option("--model")] = DEFAULT_MODEL,
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", help="Reuse/refresh a saved login under sessions/<name>.json."),
+    ] = None,
 ) -> None:
     """Phase 2 (NL): LLM picks tools (never sees the page) and engine replays."""
     from rich.table import Table
@@ -163,7 +184,14 @@ def run_mapped(
 
     aggregated: dict = {}
 
-    with Browser(headless=headless) as browser:
+    session_file = registry_mod.session_path(session) if session else None
+    with Browser(headless=headless, storage_state=session_file) as browser:
+        if session_file is not None and reg.auth:
+            status = ensure_authenticated(browser, reg, session_file=session_file)
+            _console.print(f"[cyan]session:[/] {status}")
+            if not status.authenticated:
+                _console.print("[red]could not authenticate; aborting.[/]")
+                raise typer.Exit(code=1)
         engine = Engine(browser)
         for call_n in range(1, max_calls + 1):
             _console.print(f"[bold yellow]Step {call_n} - Thinking...[/]")
@@ -218,6 +246,8 @@ def run_mapped(
                 stats_table.add_row("[bold cyan]Total LLM Tokens Used:[/]", f"{llm.total_tokens}")
                 
                 _console.print(Panel(stats_table, title="[bold violet]Execution Stats[/]", border_style="violet"))
+                if session_file is not None:
+                    browser.save_storage_state(session_file)
                 return
 
             recipe = reg.find(tool_name)
@@ -285,7 +315,54 @@ def run_mapped(
                 "content": _json.dumps(tool_result, default=str),
             })
 
+        # Loop exhausted without `done` — still persist any session changes.
+        if session_file is not None:
+            browser.save_storage_state(session_file)
+
     _console.print(f"[yellow]hit max_calls={max_calls}[/]")
+
+
+@app.command()
+def login(
+    site: Annotated[str, typer.Option("--site", help="Registry slug.")],
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", help="Session name (default: the site slug)."),
+    ] = None,
+    headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
+    manual: Annotated[
+        bool,
+        typer.Option(
+            "--manual/--auto",
+            help="Log in by hand in a visible browser (MFA/CAPTCHA) instead of "
+            "replaying the recorded login.",
+        ),
+    ] = False,
+) -> None:
+    """Create or refresh a saved login session (sessions/<name>.json)."""
+    _load_env()
+    reg = registry_mod.load(site)
+    if reg.auth is None:
+        _console.print(f"[yellow]registry {site!r} has no login tool; run `map` first.[/]")
+        raise typer.Exit(code=1)
+
+    name = session or site
+    session_file = registry_mod.session_path(name)
+    _console.rule(f"[bold cyan]login {site} (session {name!r})")
+
+    if manual:
+        # Visible browser; the human signs in and we capture the session.
+        with Browser(headless=False, storage_state=session_file) as browser:
+            status = manual_bootstrap(browser, reg, session_file=session_file)
+    else:
+        with Browser(headless=headless, storage_state=session_file) as browser:
+            status = ensure_authenticated(browser, reg, session_file=session_file)
+
+    style = "green" if status.authenticated else "red"
+    _console.print(f"[{style}]session {name!r}: {status}[/]")
+    if not status.authenticated:
+        raise typer.Exit(code=1)
+    _console.print(f"[green]saved {session_file}[/]")
 
 
 if __name__ == "__main__":
