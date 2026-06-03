@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import asdict, dataclass, field
 from typing import Any, Optional
 
@@ -61,6 +62,44 @@ def _substitute(value: Any, args: dict) -> Any:
         # JS injection and would lose type information).
         return {k: (v if k == "expr" else _substitute(v, args)) for k, v in value.items()}
     return value
+
+
+# --------------------------------------------------------------- conditions
+
+def evaluate_condition(page, check: dict) -> bool:
+    """Evaluate a `{kind, ...}` probe against `page` once. No raising, no polling.
+
+    Shared by the Engine's `verify` op and the session-validity check so the two
+    can never drift. Supported kinds: `page_text_contains` (+ `case_insensitive`),
+    `url_contains`, `element_exists` (with a `target`). Unknown kinds are False.
+    """
+    kind = check.get("kind", "page_text_contains")
+    expected = str(check.get("value", ""))
+    if kind == "page_text_contains":
+        body_text = page.evaluate("() => document.body.innerText || ''") or ""
+        if check.get("case_insensitive"):
+            return expected.lower() in body_text.lower()
+        return expected in body_text
+    if kind == "url_contains":
+        return expected in page.url
+    if kind == "element_exists":
+        try:
+            loc = resolve(page, Target.from_dict(check.get("target") or {}), timeout_ms=100)
+            return loc.count() > 0
+        except Exception:
+            return False
+    return False
+
+
+def wait_for_condition(page, check: dict, timeout_s: float = 3.0) -> bool:
+    """Poll `evaluate_condition` until it passes or `timeout_s` elapses."""
+    start = time.time()
+    while True:
+        if evaluate_condition(page, check):
+            return True
+        if (time.time() - start) > timeout_s:
+            return False
+        time.sleep(0.05)
 
 
 class Engine:
@@ -156,41 +195,10 @@ class Engine:
                     val = self.browser.page.evaluate(expr, args)
                     returned[step["key"]] = val
                 elif op == "verify":
-                    import time
-                    kind = step.get("kind", "page_text_contains")
-                    expected = str(step.get("value", ""))
-                    
-                    # Poll for up to 3 seconds for verification to pass
-                    start_time = time.time()
-                    ok = False
-                    while True:
-                        if kind == "page_text_contains":
-                            body_text = self.browser.page.evaluate(
-                                "() => document.body.innerText || ''"
-                            )
-                            if step.get("case_insensitive"):
-                                ok = expected.lower() in (body_text or "").lower()
-                            else:
-                                ok = expected in (body_text or "")
-                        elif kind == "url_contains":
-                            ok = expected in self.browser.page.url
-                        elif kind == "element_exists":
-                            try:
-                                loc = resolve(self.browser.page, Target.from_dict(step["target"]), timeout_ms=100)
-                                ok = loc.count() > 0
-                            except Exception:
-                                ok = False
-                        
-                        if ok:
-                            break
-                        if (time.time() - start_time) > 3.0:
-                            break
-                        time.sleep(0.05)
-                        
-                    if not ok:
-                        raise RecipeFailure(
-                            i, f"verify failed: {kind}={expected!r}"
-                        )
+                    if not wait_for_condition(self.browser.page, step, timeout_s=3.0):
+                        kind = step.get("kind", "page_text_contains")
+                        expected = str(step.get("value", ""))
+                        raise RecipeFailure(i, f"verify failed: {kind}={expected!r}")
                 else:
                     raise RecipeFailure(i, f"unknown op {op!r}")
             except RecipeFailure:

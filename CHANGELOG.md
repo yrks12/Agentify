@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Sessions & login.** `map` records a `login` tool (credentials prompted
+  interactively and never written to disk; parameterised to `{{...}}` in the
+  recipe), derives a success probe, and saves the browser `storage_state` to a
+  gitignored `sessions/<slug>.json`; the registry gains an `auth` block.
+- `--session <name>` on `call` and `run-mapped`: loads a saved session, verifies
+  it with the probe, lazily re-logs-in (prompting once) when missing/expired, and
+  persists it on exit.
+- `agentify login` command: `--auto` (replay the recorded login) or `--manual`
+  (visible-browser bootstrap for MFA/CAPTCHA sites).
+- Deterministic login detection (password field + sign-in signal; pure signup
+  excluded), independent of the LLM's labelling.
+
 ## [0.1.0] - 2026-06-02
 
 Initial public release.

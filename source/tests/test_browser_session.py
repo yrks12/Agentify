@@ -60,3 +60,29 @@ def test_save_storage_state_creates_parent_dir(tmp_path):
     except Exception as e:
         pytest.skip(f"Chromium unavailable: {e}")
     assert path.exists()
+
+
+def test_browser_loads_storage_state_on_start(tmp_path):
+    # Save a session, then start a NEW Browser from it and assert the cookie is
+    # loaded into the context — the stage-2 load path.
+    path = tmp_path / "sess.json"
+    try:
+        with Browser(headless=True) as b:
+            b._context.add_cookies([_COOKIE])
+            b.save_storage_state(path)
+        with Browser(headless=True, storage_state=path) as b2:
+            names = {c["name"] for c in b2._context.cookies()}
+    except Exception as e:
+        pytest.skip(f"Chromium unavailable: {e}")
+    assert "sessionid" in names
+
+
+def test_missing_storage_state_starts_fresh(tmp_path):
+    # A non-existent session file must not crash start() — just a clean context.
+    missing = tmp_path / "does_not_exist.json"
+    try:
+        with Browser(headless=True, storage_state=missing) as b:
+            cookies = b._context.cookies()
+    except Exception as e:
+        pytest.skip(f"Chromium unavailable: {e}")
+    assert cookies == []

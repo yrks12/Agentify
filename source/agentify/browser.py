@@ -20,9 +20,17 @@ class Observation:
 
 
 class Browser:
-    def __init__(self, headless: bool = True, viewport: tuple[int, int] = (1280, 800)):
+    def __init__(
+        self,
+        headless: bool = True,
+        viewport: tuple[int, int] = (1280, 800),
+        storage_state: Optional[Union[str, Path]] = None,
+    ):
         self._headless = headless
         self._viewport = viewport
+        # When set and the file exists, the context starts with these cookies +
+        # localStorage — i.e. already logged in. Missing file => fresh context.
+        self._storage_state = storage_state
         self._pw = None
         self._browser = None
         self._context = None
@@ -36,7 +44,7 @@ class Browser:
             headless=self._headless,
             args=["--disable-blink-features=AutomationControlled"],
         )
-        self._context = self._browser.new_context(
+        context_kwargs: dict = dict(
             viewport={"width": self._viewport[0], "height": self._viewport[1]},
             locale="en-US",
             extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
@@ -46,6 +54,9 @@ class Browser:
                 "Chrome/124.0 Safari/537.36"
             ),
         )
+        if self._storage_state and Path(self._storage_state).exists():
+            context_kwargs["storage_state"] = str(self._storage_state)
+        self._context = self._browser.new_context(**context_kwargs)
         # Hide the most obvious headless/automation tells before any page JS
         # runs. Sites like eBay gate on navigator.webdriver and an empty
         # plugins/languages list and serve an error page to bots otherwise.

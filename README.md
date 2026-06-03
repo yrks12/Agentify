@@ -172,7 +172,9 @@ priority order until one resolves to an element:
 
 ```
 agentify/
-├── cli.py             Typer commands: map, call, run-mapped
+├── cli.py             Typer commands: map, call, run-mapped, login
+├── credentials.py     Interactive, masked credential prompting (never stored)
+├── session.py         Runtime auth: load session, probe, lazy re-login, persist
 ├── browser.py         Playwright wrapper; actions keyed by element id
 ├── ax_tree.py         Injected JS that builds the numbered element list
 │                      used during crawling and recording
@@ -182,7 +184,7 @@ agentify/
 ├── recorder.py        Recording Browser subclass: tees every action
 │                      into a recipe step list with placeholder binding
 ├── mapper.py          The full Phase-1 pipeline: Crawler + Proposer +
-│                      Approver + Recorder
+│                      Approver + Recorder (incl. login recording)
 ├── llm.py             OpenAI client + system prompts + tool schema
 │                      (used by the Proposer, the recording driver,
 │                      and the runtime Picker)
@@ -214,6 +216,40 @@ per-site code, via four site-agnostic mechanisms:
 What's still missing are *non-linear* shapes (loops, branches) and a few
 binding edge cases — below.
 
+## Sessions & login (auth)
+
+Agentify maps and reuses **authenticated** sessions, so tools behind a login work.
+
+**Mapping.** If a site has a sign-in form, `map` proposes a `login` tool. On
+approval it **prompts you for credentials interactively** (secret fields masked
+via `getpass`); they drive the form and are parameterised to `{{username}}` /
+`{{password}}` in the recipe — **no credential is ever written to disk**. The
+mapper derives a success probe (a Log out / Sign out control, else the post-login
+URL), replay-verifies the login, and — only on success — saves the browser
+session (cookies + localStorage) to a gitignored `source/sessions/<slug>.json`.
+The registry gains an `auth` block: `{login_tool, check, storage_state}`. Login
+detection is deterministic — a tool with a password field and a sign-in signal is
+treated as a login regardless of the LLM's label; pure signup is excluded.
+
+**Reuse.** Pass `--session <name>` to `call` or `run-mapped`: it loads the saved
+session, verifies you're still logged in with the probe, and — only if the
+session is missing or expired — re-runs the login (prompting once) and re-saves.
+That lazy re-auth is how a session "stays logged in" across calls; cookies are
+persisted again on exit.
+
+```bash
+agentify call       --site shop --tool view_cart --args '{}' --session shop
+agentify run-mapped --site shop --task "what's in my cart?"  --session shop
+
+# Create/refresh a session explicitly:
+agentify login --site shop --session shop
+# MFA/CAPTCHA sites — sign in by hand in a visible browser, then it's captured:
+agentify login --site shop --manual
+```
+
+Only the resulting `storage_state` is persisted (gitignored); credentials are
+never stored.
+
 ## What this does NOT handle (and how you'd extend it)
 
 The current system works well for **single-form submissions**,
@@ -222,17 +258,13 @@ and **single-page data extraction**. Once you've internalised how it works,
 these are the real seams where it falls over — listed with the concrete
 fix each one needs:
 
-### 1. No session persistence between `call` invocations
-Every `agentify call` opens a fresh Browser, executes the recipe, closes
-it. So `call login(...)` followed by `call view_cart()` won't work — the
-second call has no cookies. Any flow that needs auth state, shopping
-carts, OAuth, or multi-step wizards is blocked.
-
-- **Why it matters:** real apps need login.
-- **Fix size:** small. Add a `Session` class in `browser.py` that keeps
-  a Playwright `BrowserContext` alive across calls (keyed by `--session`
-  flag). `run-mapped` already runs everything in one context, so only
-  `call` has the problem.
+### 1. ~~No session persistence between `call` invocations~~ — ✅ DONE
+**Resolved** — see [Sessions & login](#sessions--login-auth) above. `map` records
+a `login` tool (prompting for credentials, never storing them) and saves a
+`storage_state` session; `--session <name>` on `call`/`run-mapped` loads it,
+re-authenticates lazily on expiry, and persists it on exit. Cookie/localStorage
+auth is covered; in-memory bearer tokens and hardware-MFA remain out of scope
+(use `login --manual` to bootstrap CAPTCHA/MFA sites by hand).
 
 ### 2. No iteration op (no pagination, no for-each)
 Recipes are straight-line sequences. You can't say "for each story on

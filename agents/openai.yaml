@@ -5,7 +5,7 @@
 # Spec: https://developers.openai.com/codex/skills
 interface:
   display_name: "Agentify"
-  short_description: "Turn any website into an LLM-callable API — record deterministic Playwright recipes once, then call them as tools without the model ever seeing the page."
+  short_description: "Turn any website into an LLM-callable API — record deterministic Playwright recipes once (including logins, with reusable sessions), then call them as tools without the model ever seeing the page."
   brand_color: "#10A37F"
 
 policy:
