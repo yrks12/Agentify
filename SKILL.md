@@ -73,7 +73,7 @@ approve it, the CLI **prompts you for the credentials interactively** (secret
 fields are masked via `getpass`). They drive the form and are parameterised to
 `{{username}}`/`{{password}}` in the recipe — **no credential is ever written to
 disk**. The mapper derives a success probe, replay-verifies the login, and saves
-the resulting browser session (cookies + localStorage) to a gitignored
+the resulting browser session (cookies + localStorage + IndexedDB) to a gitignored
 `$SKILL_DIR/source/sessions/<slug>.json`. The registry also gains an `auth` block
 describing how to re-authenticate. (Login detection is deterministic — a tool
 with a password field and a sign-in signal is treated as a login regardless of
@@ -96,17 +96,26 @@ Deterministic replay of a recorded recipe with explicit JSON args.
   --task "Give me the top 3 stories right now"
 ```
 
-## Reusing a login — `--session`
+## Sessions — on by default
 
-Pass `--session <name>` to `call` or `run-mapped` to run inside a saved session.
-On start it loads `sessions/<name>.json`, checks you're still logged in with the
-mapped probe, and — only if the session is missing or expired — **re-runs the
-login (prompting once)** and re-saves. Cookies are persisted again on exit.
-Credentials are only ever prompted, never stored.
+`call` and `run-mapped` **persist state by default**, in a session named after the
+site (`sessions/<slug>.json`), so cookies, **localStorage and IndexedDB** carry
+across separate runs — that's what makes a "continuous agent" (do one action, then
+another, in the same logged-in/stateful context). Flags:
+
+- (nothing) — use/maintain the per-site session automatically.
+- `--no-session` — fresh browser; load and save nothing.
+- `--session <name>` — use a named session (multi-account, or a shared one).
+
+On start it loads the session; for sites with a login it checks you're still
+logged in with the mapped probe and — only if the session is missing or expired —
+**re-runs the login (prompting once)** and re-saves. State is persisted again on
+exit. Credentials are only ever prompted, never stored.
 
 ```bash
+# Reuses sessions/shop.json automatically (no flag needed):
 "$SKILL_DIR/venv/bin/python" -m agentify.cli call \
-  --site shop --tool view_cart --args '{}' --session shop
+  --site shop --tool view_cart --args '{}'
 ```
 
 ## Phase 2c — manage a session directly (`login`)
