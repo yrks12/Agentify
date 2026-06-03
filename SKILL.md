@@ -1,7 +1,7 @@
 ---
 name: Agentify
 description: Turn any website into an LLM-callable API. Phase 1 ("map") visits a site, proposes tool functions, and records deterministic Playwright recipes into recipes/<slug>.tools.json. Phase 2 ("call" or "run-mapped") replays a recipe directly or lets the LLM pick a tool from natural language — the page itself is never sent to the model. Use when the user wants to scrape, automate, or expose a website as tools.
-argument-hint: "[map|call|run-mapped] [...args]"
+argument-hint: "[map|call|run-mapped|login] [...args]"
 allowed-tools: Bash, Read
 ---
 
@@ -66,6 +66,19 @@ Recording costs LLM calls once, at map time. Replay (`call`) is pure Playwright
 with **zero** LLM calls — typically a few seconds for a multi-step flow, versus
 an LLM round-trip per step in a general agentic browser.
 
+### Logins & sessions (mapped automatically)
+
+If the landing page has a sign-in form, `map` proposes a `login` tool. When you
+approve it, the CLI **prompts you for the credentials interactively** (secret
+fields are masked via `getpass`). They drive the form and are parameterised to
+`{{username}}`/`{{password}}` in the recipe — **no credential is ever written to
+disk**. The mapper derives a success probe, replay-verifies the login, and saves
+the resulting browser session (cookies + localStorage) to a gitignored
+`$SKILL_DIR/source/sessions/<slug>.json`. The registry also gains an `auth` block
+describing how to re-authenticate. (Login detection is deterministic — a tool
+with a password field and a sign-in signal is treated as a login regardless of
+how the LLM labelled it; pure signup is excluded.)
+
 ## Phase 2a — call a single tool directly (no LLM)
 
 Deterministic replay of a recorded recipe with explicit JSON args.
@@ -83,6 +96,30 @@ Deterministic replay of a recorded recipe with explicit JSON args.
   --task "Give me the top 3 stories right now"
 ```
 
+## Reusing a login — `--session`
+
+Pass `--session <name>` to `call` or `run-mapped` to run inside a saved session.
+On start it loads `sessions/<name>.json`, checks you're still logged in with the
+mapped probe, and — only if the session is missing or expired — **re-runs the
+login (prompting once)** and re-saves. Cookies are persisted again on exit.
+Credentials are only ever prompted, never stored.
+
+```bash
+"$SKILL_DIR/venv/bin/python" -m agentify.cli call \
+  --site shop --tool view_cart --args '{}' --session shop
+```
+
+## Phase 2c — manage a session directly (`login`)
+
+```bash
+# Auto: replay the recorded login (prompts once), then cache the session.
+"$SKILL_DIR/venv/bin/python" -m agentify.cli login --site shop --session shop
+
+# Manual bootstrap for MFA/CAPTCHA sites: opens a VISIBLE browser, you sign in
+# by hand, and whatever session the site sets is captured.
+"$SKILL_DIR/venv/bin/python" -m agentify.cli login --site shop --manual
+```
+
 ## Where things live
 
 | Path | Purpose |
@@ -90,12 +127,13 @@ Deterministic replay of a recorded recipe with explicit JSON args.
 | `$SKILL_DIR/venv/` | Python venv with playwright, typer, openai, rich, python-dotenv |
 | `$SKILL_DIR/source/` | Editable install of the `agentify` package |
 | `$SKILL_DIR/source/recipes/` | Generated `<slug>.tools.json` registries |
+| `$SKILL_DIR/source/sessions/` | Saved login sessions (`storage_state`), gitignored — never contains credentials |
 | `$SKILL_DIR/source/.env` | `OPENAI_API_KEY`, `AGENTIFY_MODEL` |
 | `~/Library/Caches/ms-playwright/chromium-*` | Bundled Chromium browser (managed by Playwright) |
 
 ## Recipe shape (for reference)
 
-Each tool is `{name, description, parameters: JSON-Schema, steps: [...]}`. Step ops: `goto`, `click`, `type`, `select`, `press_enter`, `press`, `scroll`, `wait`, `extract`, `js_extract`, `verify`. Selectors try role+name → CSS → text in order; a target of `{"role": "option"}` resolves to the first match, which is how autocomplete suggestions are selected parameter-independently. `press` sends a key (e.g. `{"op": "press", "key": "Enter"}`) to a target, or to whatever is focused if no target is given.
+Each tool is `{name, description, parameters: JSON-Schema, steps: [...]}`. Step ops: `goto`, `click`, `type`, `select`, `press_enter`, `press`, `scroll`, `wait`, `extract`, `js_extract`, `verify`. Selectors try role+name → CSS → text in order; a target of `{"role": "option"}` resolves to the first match, which is how autocomplete suggestions are selected parameter-independently. `press` sends a key (e.g. `{"op": "press", "key": "Enter"}`) to a target, or to whatever is focused if no target is given. A site that has a login also carries a top-level `auth` block — `{login_tool, check, storage_state}` — naming the login recipe, its success probe, and the gitignored session path.
 
 ## Updating the skill
 
@@ -113,4 +151,4 @@ If Playwright is upgraded, reinstall the browser:
 
 ## Full reference
 
-See `$SKILL_DIR/README.md` for the design rationale, known limitations (no session persistence between `call` invocations, no iteration op, shallow crawler), and extension paths.
+See `$SKILL_DIR/README.md` for the design rationale, sessions/login, remaining limitations (no iteration op, shallow crawler), and extension paths.
