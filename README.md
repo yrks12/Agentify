@@ -310,27 +310,21 @@ for it. That's why Wikipedia got `search_wikipedia` but not
   is real work because crawling becomes recursive and stateful (and may
   need login fixtures).
 
-### 5. Param binding fails on non-text actions
-When the Recorder sees `type_text(id=4, text="__W2A_EMAIL__")` it knows
-to bind that field to `{{email}}`. Typeahead/autocomplete *is* handled now
-(see "Multi-step flows" above — the suggestion click is normalized to a
-parameter-independent first-option select). But for **clicks** on radio
-buttons, checkboxes, date pickers, file uploads — and for "open X by
-title" flows where the agent navigates by clicking a named link instead of
-typing — there's no typed text, so no sentinel to swap. Result: those
-params get hardcoded to whatever the mapping agent picked (e.g. `pizza_size`
-frozen to "Small" instead of `{{pizza_size}}`). Note the replay-verify pass
-can still *pass* such a recipe, because the hardcoded path works for the
-example value — so inspect recipes whose parameters drive a click rather
-than a type.
+### 5. ~~Param binding fails on non-text actions~~ — ✅ DONE (mostly)
+**Resolved** for the common cases. The Recorder now binds non-text selections
+back to `{{param}}`: a native `<select>` whose chosen value/label equals a
+placeholder, and a **click** on a radio / listbox-option / "open X by name" link
+whose accessible name equals a placeholder value, are rewritten to resolve by
+`{{param}}` (and the value-specific css fallback is dropped). Matching is exact
+(case-insensitive, trimmed) so navigation clicks like "Book a Call" stay literal.
+The mapper also tells the recording agent to pick the option whose visible label
+is exactly the placeholder value. Replay needs no change — `recipe._substitute`
+already templates `{{param}}` into a step's `target`.
 
-- **Why it matters:** any form with selects, radios, checkboxes is
-  partially parameterized.
-- **Fix size:** medium. The Mapper needs to track which placeholder
-  slot is "active" when a non-text action fires, by feeding the agent
-  the synthetic-task placeholders with their parameter names and asking
-  it to pick options whose visible text matches the placeholder. The
-  Recorder then matches role+name+value against the placeholder map.
+- **Still out of scope:** boolean checkboxes (no text value to match), date
+  pickers, file uploads, **custom (non-native) dropdown widgets** where the
+  option isn't committed as a clean role+name, and two params sharing one value
+  (first match wins). Inspect those recipes.
 
 ### Path forward
 

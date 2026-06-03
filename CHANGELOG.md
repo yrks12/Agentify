@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Parameter binding for non-text actions.** Native `<select>` values and
+  clicks on radios / listbox-options / named links are now parameterised to
+  `{{param}}` (matched exactly against the placeholder value), instead of being
+  frozen to whatever the mapping agent picked. Replay is unchanged
+  (`_substitute` already templates into a step's `target`). Boolean checkboxes,
+  date pickers, file uploads, and custom non-native dropdown widgets remain out
+  of scope.
+
 ### Added
 - **Sessions & login.** `map` records a `login` tool (credentials prompted
   interactively and never written to disk; parameterised to `{{...}}` in the
