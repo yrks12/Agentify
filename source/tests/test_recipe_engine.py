@@ -2,7 +2,19 @@
 
 from dataclasses import dataclass, field
 
-from agentify.recipe import Engine, Recipe, RecipeFailure
+from agentify.recipe import Engine, Recipe, RecipeFailure, _substitute
+
+
+def test_substitute_templates_into_target_name_and_value():
+    # The replay side of #3: {{param}} inside a step's target resolves the right
+    # element for the caller's argument — no engine change needed.
+    steps = [
+        {"op": "click", "target": {"role": "radio", "name": "{{title}}"}},
+        {"op": "select", "target": {"role": "combobox", "name": "Month"}, "value": "{{month}}"},
+    ]
+    out = _substitute(steps, {"title": "Mrs", "month": "March"})
+    assert out[0]["target"]["name"] == "Mrs"
+    assert out[1]["value"] == "March"
 
 
 @dataclass
