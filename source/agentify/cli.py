@@ -33,6 +33,18 @@ def _load_env() -> None:
     load_dotenv(override=False)
 
 
+def _resolve_session_name(site: str, session: Optional[str], no_session: bool) -> Optional[str]:
+    """Session persistence is ON by default, named after the site.
+
+    So `call`/`run-mapped` reuse state across runs without a flag (the "continuous
+    agent"). `--no-session` opts out (fresh browser); `--session NAME` selects a
+    named/multi-account session; otherwise the site slug is used.
+    """
+    if no_session:
+        return None
+    return session or site
+
+
 @app.command()
 def map(
     url: Annotated[str, typer.Option("--url", help="Site URL to map.")],
@@ -63,8 +75,12 @@ def call(
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
     session: Annotated[
         Optional[str],
-        typer.Option("--session", help="Reuse/refresh a saved login under sessions/<name>.json."),
+        typer.Option("--session", help="Session name to load/save (default: the site slug)."),
     ] = None,
+    no_session: Annotated[
+        bool,
+        typer.Option("--no-session", help="Fresh browser; don't load or save any session state."),
+    ] = False,
 ) -> None:
     """Phase 2 (direct): execute one mapped tool with explicit args. No LLM."""
     _load_env()
@@ -83,7 +99,8 @@ def call(
     _console.rule(f"[bold cyan]call {site}.{tool}")
     _console.print(Panel(_json.dumps(parsed_args, indent=2), title="args", border_style="dim"))
 
-    session_file = registry_mod.session_path(session) if session else None
+    session_name = _resolve_session_name(site, session, no_session)
+    session_file = registry_mod.session_path(session_name) if session_name else None
     with Browser(headless=headless, storage_state=session_file) as browser:
         if session_file is not None and reg.auth:
             status = ensure_authenticated(browser, reg, session_file=session_file)
@@ -129,8 +146,12 @@ def run_mapped(
     model: Annotated[str, typer.Option("--model")] = DEFAULT_MODEL,
     session: Annotated[
         Optional[str],
-        typer.Option("--session", help="Reuse/refresh a saved login under sessions/<name>.json."),
+        typer.Option("--session", help="Session name to load/save (default: the site slug)."),
     ] = None,
+    no_session: Annotated[
+        bool,
+        typer.Option("--no-session", help="Fresh browser; don't load or save any session state."),
+    ] = False,
 ) -> None:
     """Phase 2 (NL): LLM picks tools (never sees the page) and engine replays."""
     from rich.table import Table
@@ -184,7 +205,8 @@ def run_mapped(
 
     aggregated: dict = {}
 
-    session_file = registry_mod.session_path(session) if session else None
+    session_name = _resolve_session_name(site, session, no_session)
+    session_file = registry_mod.session_path(session_name) if session_name else None
     with Browser(headless=headless, storage_state=session_file) as browser:
         if session_file is not None and reg.auth:
             status = ensure_authenticated(browser, reg, session_file=session_file)

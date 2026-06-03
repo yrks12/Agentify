@@ -86,3 +86,59 @@ def test_missing_storage_state_starts_fresh(tmp_path):
     except Exception as e:
         pytest.skip(f"Chromium unavailable: {e}")
     assert cookies == []
+
+
+# A real origin is required for IndexedDB; serve a stub page via route
+# interception so the test needs no network.
+_STUB_ORIGIN = "https://idb.test/"
+_IDB_PUT = """() => new Promise((resolve, reject) => {
+  const open = indexedDB.open('app', 1);
+  open.onupgradeneeded = () => open.result.createObjectStore('kv');
+  open.onsuccess = () => {
+    const tx = open.result.transaction('kv', 'readwrite');
+    tx.objectStore('kv').put('token-123', 'auth');
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  };
+  open.onerror = () => reject(open.error);
+})"""
+_IDB_GET = """() => new Promise((resolve) => {
+  const open = indexedDB.open('app', 1);
+  open.onsuccess = () => {
+    try {
+      const g = open.result.transaction('kv', 'readonly').objectStore('kv').get('auth');
+      g.onsuccess = () => resolve(g.result || null);
+      g.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  };
+  open.onerror = () => resolve(null);
+})"""
+
+
+def _serve_stub(page):
+    page.route("**/*", lambda route: route.fulfill(
+        status=200, content_type="text/html", body="<html><body>idb</body></html>"))
+
+
+def test_indexeddb_round_trips_across_sessions(tmp_path):
+    # IndexedDB-backed auth must survive save -> reload (storage_state indexed_db).
+    path = tmp_path / "sess.json"
+    try:
+        with Browser(headless=True) as b:
+            _serve_stub(b.page)
+            b.page.goto(_STUB_ORIGIN)
+            b.page.evaluate(_IDB_PUT)
+            b.save_storage_state(path)
+
+        data = json.loads(path.read_text())
+        has_idb = any("indexedDB" in origin for origin in data.get("origins", []))
+
+        with Browser(headless=True, storage_state=path) as b2:
+            _serve_stub(b2.page)
+            b2.page.goto(_STUB_ORIGIN)
+            restored = b2.page.evaluate(_IDB_GET)
+    except Exception as e:
+        pytest.skip(f"Chromium unavailable: {e}")
+
+    assert has_idb, "storage_state did not capture an indexedDB section"
+    assert restored == "token-123", "IndexedDB value did not survive the reload"

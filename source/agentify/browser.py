@@ -76,15 +76,18 @@ class Browser:
             self._pw.stop()
 
     def save_storage_state(self, path: Union[str, Path]) -> Path:
-        """Persist cookies + localStorage to `path` for later session reuse.
+        """Persist cookies + localStorage + IndexedDB to `path` for reuse.
 
-        Returns the path written. Secrets (the typed credentials) are not part
-        of storage_state — only the session artifacts the site set after login.
+        `indexed_db=True` captures IndexedDB too, so SPA/Firebase-style logins
+        that keep their token there survive across runs (it's restored on the
+        next `new_context(storage_state=...)`). Returns the path written.
+        Secrets (the typed credentials) are not part of storage_state — only the
+        session artifacts the site set after login.
         """
         assert self._context is not None, "browser not started"
         p = Path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        self._context.storage_state(path=str(p))
+        self._context.storage_state(path=str(p), indexed_db=True)
         return p
 
     def __enter__(self) -> "Browser":

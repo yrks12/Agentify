@@ -226,20 +226,25 @@ via `getpass`); they drive the form and are parameterised to `{{username}}` /
 `{{password}}` in the recipe — **no credential is ever written to disk**. The
 mapper derives a success probe (a Log out / Sign out control, else the post-login
 URL), replay-verifies the login, and — only on success — saves the browser
-session (cookies + localStorage) to a gitignored `source/sessions/<slug>.json`.
-The registry gains an `auth` block: `{login_tool, check, storage_state}`. Login
-detection is deterministic — a tool with a password field and a sign-in signal is
-treated as a login regardless of the LLM's label; pure signup is excluded.
+session (cookies + localStorage + IndexedDB) to a gitignored
+`source/sessions/<slug>.json`. The registry gains an `auth` block:
+`{login_tool, check, storage_state}`. Login detection is deterministic — a tool
+with a password field and a sign-in signal is treated as a login regardless of
+the LLM's label; pure signup is excluded.
 
-**Reuse.** Pass `--session <name>` to `call` or `run-mapped`: it loads the saved
-session, verifies you're still logged in with the probe, and — only if the
-session is missing or expired — re-runs the login (prompting once) and re-saves.
-That lazy re-auth is how a session "stays logged in" across calls; cookies are
-persisted again on exit.
+**Reuse — on by default.** `call` and `run-mapped` persist state by default in a
+session named after the site, so cookies, localStorage and IndexedDB carry across
+separate runs (the "continuous agent": do one action, then another, in the same
+logged-in/stateful context). `--no-session` runs a fresh browser; `--session
+<name>` selects a named/multi-account session. For sites with a login it verifies
+you're still in with the probe and — only if the session is missing or expired —
+re-runs the login (prompting once) and re-saves. That lazy re-auth is how a
+session "stays logged in" across calls.
 
 ```bash
-agentify call       --site shop --tool view_cart --args '{}' --session shop
-agentify run-mapped --site shop --task "what's in my cart?"  --session shop
+agentify call       --site shop --tool view_cart --args '{}'   # reuses sessions/shop.json
+agentify run-mapped --site shop --task "what's in my cart?"
+agentify call       --site shop --tool view_cart --args '{}' --no-session  # fresh
 
 # Create/refresh a session explicitly:
 agentify login --site shop --session shop
@@ -261,10 +266,11 @@ fix each one needs:
 ### 1. ~~No session persistence between `call` invocations~~ — ✅ DONE
 **Resolved** — see [Sessions & login](#sessions--login-auth) above. `map` records
 a `login` tool (prompting for credentials, never storing them) and saves a
-`storage_state` session; `--session <name>` on `call`/`run-mapped` loads it,
-re-authenticates lazily on expiry, and persists it on exit. Cookie/localStorage
-auth is covered; in-memory bearer tokens and hardware-MFA remain out of scope
-(use `login --manual` to bootstrap CAPTCHA/MFA sites by hand).
+`storage_state` session; persistence is **on by default** for `call`/`run-mapped`
+(per-site, `--no-session` to opt out), it re-authenticates lazily on expiry, and
+persists on exit. **Cookies, localStorage and IndexedDB** are covered; only
+`sessionStorage` (per-tab, ephemeral) and hardware-MFA remain out of scope (use
+`login --manual` to bootstrap CAPTCHA/MFA sites by hand).
 
 ### 2. No iteration op (no pagination, no for-each)
 Recipes are straight-line sequences. You can't say "for each story on
