@@ -12,7 +12,9 @@ The output is a SiteRegistry written to recipes/<slug>.tools.json.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -21,10 +23,11 @@ from rich.panel import Panel
 
 from .agent import Agent
 from .browser import Browser
+from .credentials import is_secret_field, prompt_credentials
 from .llm import LLM
 from .recipe import Engine, Recipe, RecipeFailure
 from .recorder import RecordingBrowser
-from .registry import SiteRegistry
+from .registry import AuthConfig, SiteRegistry, session_path
 
 
 _console = Console()
@@ -177,6 +180,11 @@ Rules:
   whenever fields must be filled before the useful data appears.
 - "extract" tools just READ data from a page that is already showing it
   (top stories, article facts, ...) with no interaction needed.
+- "login" tools sign the user in. Propose AT MOST ONE "login" tool, and only
+  if the site has a sign-in form. Its parameters are the credential fields you
+  saw (e.g. "username" or "email", and "password"). For a "login" tool you do
+  NOT need to supply "example" values — credentials are prompted from the user
+  at record time, never invented.
 - Reuse names visible in the page (e.g. "submit_contact_form" if the page has a Contact form).
 - For "action" tools, the parameters should map 1:1 to the input fields you saw.
 - For "extract" tools, include parameters like `n` (limit) or `query` (search term) if relevant.
@@ -224,6 +232,39 @@ def propose_tools(llm: LLM, survey: SiteSurvey) -> list[ToolProposal]:
                 examples=examples,
             )
         )
+    return _coerce_login_type(proposals)
+
+
+_SIGNIN_RE = re.compile(r"log[\s_-]?in|sign[\s_-]?in", re.IGNORECASE)
+_SIGNUP_RE = re.compile(r"sign[\s_-]?up|register|create.{0,12}account|new account", re.IGNORECASE)
+
+
+def _coerce_login_type(proposals: list[ToolProposal]) -> list[ToolProposal]:
+    """Deterministically tag sign-in tools as `login`, whatever the LLM labeled.
+
+    The proposer is inconsistent about emitting ``tool_type: "login"``, so we
+    don't rely on it: a tool that takes a secret (password) field AND reads as a
+    sign-in (name/description, or a login-ish start_url) is a login. Account
+    *creation* (signup/register) is explicitly excluded — it also has a password
+    field and often shares the /login page, but must not be re-run to mint
+    accounts.
+    """
+    for p in proposals:
+        if p.tool_type == "login":
+            continue
+        props = p.parameters.get("properties") or {}
+        has_secret = any(is_secret_field(name) for name in props)
+        text = f"{p.name} {p.description}"
+        # A sign-in word in the name/description is decisive (covers a merged
+        # "signup_login" tool too — the recording task drives the login form).
+        # A login-ish URL only counts when the tool isn't a pure signup, since
+        # signup commonly shares the /login page.
+        signin_in_text = bool(_SIGNIN_RE.search(text))
+        signup_in_text = bool(_SIGNUP_RE.search(text))
+        signin_in_url = bool(_SIGNIN_RE.search(p.start_url or ""))
+        can_sign_in = signin_in_text or (signin_in_url and not signup_in_text)
+        if has_secret and can_sign_in:
+            p.tool_type = "login"
     return proposals
 
 
@@ -552,6 +593,147 @@ def _record_verified_action(
     return recipe  # last attempt; let the user see/fix it
 
 
+# ---------------------------------------------------------------- login
+
+_LOGOUT_RE = re.compile(r"log\s?out|sign\s?out", re.IGNORECASE)
+
+
+def _login_task(
+    proposal: ToolProposal, credentials: dict[str, str], hint: str = ""
+) -> str:
+    bindings = "\n".join(f"  - {k}: {v!r}" for k, v in credentials.items())
+    task = (
+        f"You are recording a LOGIN recipe for the tool `{proposal.name}`: "
+        f"{proposal.description}\n"
+        f"Use these EXACT values when filling the sign-in fields:\n{bindings}\n"
+        f"Navigate to the sign-in form, fill every credential field, and submit. "
+        f"When the page shows you are logged in (an account menu, dashboard, or a "
+        f"Log out control is visible), call done(success=true). "
+        f"Do not call extract during this recording."
+    )
+    if hint:
+        task += (
+            f"\n\nIMPORTANT: a previous attempt FAILED to replay — {hint}. "
+            f"Make sure every credential field is filled and the form is submitted "
+            f"so the page reaches the logged-in state."
+        )
+    return task
+
+
+def _derive_login_check(obs) -> dict:
+    """A cheap probe proving we're logged in: `{kind, ...}` or `{}`.
+
+    Prefers a Log out / Sign out control; falls back to the post-login URL path.
+    Doubles as the recipe's final `verify` step and the stage-2 session-validity
+    probe. Only the matched "log out"/"sign out" token is stored as the target
+    name — preserving the site's real spelling (e.g. "Logout") so the probe
+    actually resolves, while dropping any account identifier that might trail it
+    (e.g. "Logout (alice@x)").
+    """
+    for el in obs.elements:
+        if el.role in ("link", "button"):
+            match = _LOGOUT_RE.search(el.name or "")
+            if match:
+                return {
+                    "kind": "element_exists",
+                    "target": {"role": el.role, "name": match.group(0)},
+                }
+    path = urlparse(obs.url).path
+    if path and path not in ("", "/"):
+        return {"kind": "url_contains", "value": path}
+    return {}
+
+
+def record_login_recipe(
+    proposal: ToolProposal,
+    llm: LLM,
+    *,
+    headless: bool,
+    credentials: dict[str, str],
+    hint: str = "",
+) -> tuple[Recipe, dict]:
+    """Record a parameterised login recipe and derive its success probe.
+
+    The prompted credentials are used as the recorder placeholders, so the
+    existing `_bind` machinery swaps each typed value back to `{{param}}` — the
+    saved recipe holds `{{username}}`/`{{password}}`, never the secret itself.
+    Returns `(recipe, check)` where `check` is the `{kind, ...}` probe.
+    """
+    rec_browser = RecordingBrowser(placeholders=credentials, headless=headless)
+    check: dict = {}
+    with rec_browser:
+        agent = Agent(browser=rec_browser, llm=llm, max_steps=20)
+        agent.run(task=_login_task(proposal, credentials, hint), start_url=proposal.start_url)
+        try:
+            check = _derive_login_check(rec_browser.observe())
+        except Exception as e:
+            _console.print(f"    [yellow]login check derivation skipped: {e}[/]")
+
+    steps = _normalize_autocomplete(list(rec_browser.steps))
+    steps.append({"op": "wait", "ms": 1200})
+    if check:
+        # Embed the probe so a broken login fails loudly at replay/verify time.
+        steps.append({"op": "verify", **check})
+    recipe = Recipe(
+        name=proposal.name,
+        description=proposal.description,
+        parameters=proposal.parameters,
+        steps=steps,
+        returns={},
+    )
+    return recipe, check
+
+
+def _verify_login_and_capture(
+    recipe: Recipe, credentials: dict[str, str], headless: bool, session_file: Path
+) -> tuple[bool, str]:
+    """Replay the login with the real credentials; persist storage_state on success."""
+    try:
+        with Browser(headless=headless) as b:
+            Engine(b).execute(recipe, credentials)
+            b.save_storage_state(session_file)
+        return True, f"login replayed -> session saved to {session_file.name}"
+    except RecipeFailure as e:
+        return False, f"step {e.step_index}: {e.reason}"
+    except Exception as e:  # browser/launch errors, etc.
+        return False, f"{type(e).__name__}: {e}"
+
+
+def _record_verified_login(
+    proposal: ToolProposal,
+    llm: LLM,
+    *,
+    headless: bool,
+    credentials: dict[str, str],
+    session_file: Path,
+    max_attempts: int = 2,
+) -> tuple[Recipe, dict]:
+    """Record a login recipe, replay-verify it, and capture the session.
+
+    Mirrors `_record_verified_action`: a failed replay feeds its reason back to
+    the recording agent as a hint for one retry.
+    """
+    hint = ""
+    recipe: Optional[Recipe] = None
+    check: dict = {}
+    for attempt in range(1, max_attempts + 1):
+        recipe, check = record_login_recipe(
+            proposal, llm, headless=headless, credentials=credentials, hint=hint
+        )
+        ok, msg = _verify_login_and_capture(recipe, credentials, headless, session_file)
+        if ok:
+            _console.print(f"    [green]login replay check passed: {msg}[/]")
+            return recipe, check
+        _console.print(
+            f"    [yellow]login replay failed (attempt {attempt}/{max_attempts}): {msg}[/]"
+        )
+        hint = msg
+    _console.print(
+        "    [red]login recipe still fails to replay — saved anyway; inspect the steps.[/]"
+    )
+    return recipe, check
+
+
 # ---------------------------------------------------------------- top-level
 
 def map_site(
@@ -586,10 +768,15 @@ def map_site(
     # 4. Record
     _console.print(f"[bold]Phase 4/4:[/] recording {len(approved)} recipe(s)...")
     recipes: list[Recipe] = []
+    auth: Optional[AuthConfig] = None
     for p in approved:
         _console.print(f"  • recording {p.name} ({p.tool_type})...")
         try:
-            if p.tool_type == "extract":
+            if p.tool_type == "login":
+                r, auth = _record_login_tool(p, llm, slug, headless, interactive)
+                if r is None:
+                    continue
+            elif p.tool_type == "extract":
                 # Need an open browser for the LLM to see the page once.
                 with Browser(headless=headless) as b:
                     r = record_extract_recipe(p, llm, b)
@@ -607,5 +794,42 @@ def map_site(
         except Exception as e:
             _console.print(f"    [red]failed: {e}[/]")
 
-    registry = SiteRegistry(site=slug, base_url=url, tools=recipes)
+    registry = SiteRegistry(site=slug, base_url=url, tools=recipes, auth=auth)
     return registry
+
+
+def _record_login_tool(
+    proposal: ToolProposal,
+    llm: LLM,
+    slug: str,
+    headless: bool,
+    interactive: bool,
+) -> tuple[Optional[Recipe], Optional[AuthConfig]]:
+    """Prompt for credentials, record+verify the login, and build its AuthConfig.
+
+    Returns `(None, None)` when login can't be recorded (no interactive prompt
+    available), so the caller skips it without aborting the rest of the map.
+    """
+    if not interactive:
+        _console.print(
+            "    [yellow]skipped login tool: credentials need an interactive "
+            "prompt (omit --auto-approve).[/]"
+        )
+        return None, None
+
+    cred_fields = list((proposal.parameters.get("properties") or {}).keys())
+    if not cred_fields:
+        _console.print("    [yellow]skipped login tool: no credential fields found.[/]")
+        return None, None
+
+    credentials = prompt_credentials(cred_fields, tool_name=proposal.name)
+    session_file = session_path(slug)
+    recipe, check = _record_verified_login(
+        proposal, llm, headless=headless, credentials=credentials, session_file=session_file
+    )
+    auth = AuthConfig(
+        login_tool=recipe.name,
+        check=check,
+        storage_state=f"sessions/{slug}.json",
+    )
+    return recipe, auth
