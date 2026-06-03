@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--session <name>` on `call` and `run-mapped`: loads a saved session, verifies
   it with the probe, lazily re-logs-in (prompting once) when missing/expired, and
   persists it on exit.
+- **Session persistence on by default**, named after the site, so cookies,
+  localStorage and IndexedDB carry across separate `call`/`run-mapped` runs (the
+  "continuous agent"). `--no-session` opts out (fresh browser); `--session <name>`
+  selects a named/multi-account session.
+- **IndexedDB capture** (`storage_state(indexed_db=True)`) so SPA/Firebase-style
+  logins that keep their token in IndexedDB survive across runs.
 - `agentify login` command: `--auto` (replay the recorded login) or `--manual`
   (visible-browser bootstrap for MFA/CAPTCHA sites).
 - Deterministic login detection (password field + sign-in signal; pure signup
