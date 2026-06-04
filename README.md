@@ -357,6 +357,15 @@ Replay is forgiving of real-site flakiness without sacrificing determinism:
   and a de-noised, single-line reason (op + target + first error line) rather
   than a raw multi-line stack — better for you on `call` and for the LLM's
   recovery on `run-mapped`.
+- **Failures fail soft — partial results + context are salvaged.** When a tool
+  dies partway, the failure also carries `partial` (everything `extract`/
+  `js_extract`'d before it died) and `url` (where the browser landed). `call`
+  prints both instead of discarding them, and `run-mapped` feeds the LLM a
+  `{error, failed_step, op, url, partial}` payload — plus a nudge if the same
+  tool fails repeatedly — so it recovers with real context. Recipes aren't
+  transactional, so already-performed side effects aren't rolled back; deterministic
+  replay from step 0 is the recovery model. Mid-recipe **session-expiry detection**
+  is not automatic (the surfaced `url` reveals a login-wall landing).
 
 ### Path forward
 
