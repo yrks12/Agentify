@@ -366,6 +366,15 @@ Replay is forgiving of real-site flakiness without sacrificing determinism:
   transactional, so already-performed side effects aren't rolled back; deterministic
   replay from step 0 is the recovery model. Mid-recipe **session-expiry detection**
   is not automatic (the surfaced `url` reveals a login-wall landing).
+- **JS-heavy sites: settle + consent walls.** `observe()` waits for the page to
+  actually render (polls until the interactive-element count is non-zero and
+  stable, then snapshots — and retries on an empty result) instead of firing at
+  `domcontentloaded`, so client-rendered SPAs no longer come back blank. The
+  crawler also clicks past common cookie/consent interstitials (reject-first, then
+  accept; e.g. Google's "before you continue") so it reaches the real app rather
+  than the wall. **Still hard:** custom ARIA widgets (combobox/date-picker), very
+  dense pages (element cap), iframes/shadow DOM, canvas apps, and hard
+  CAPTCHA/anti-bot — see the JS-sites roadmap.
 
 ### Path forward
 

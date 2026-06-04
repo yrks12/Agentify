@@ -24,6 +24,7 @@ from rich.panel import Panel
 from .agent import Agent
 from .browser import Browser
 from .credentials import is_secret_field, prompt_credentials
+from .interstitials import dismiss as dismiss_interstitials
 from .llm import LLM
 from .recipe import Engine, Recipe, RecipeFailure
 from .recorder import RecordingBrowser
@@ -159,8 +160,9 @@ def survey_site(
     """Crawl the landing page and same-origin links, breadth-first.
 
     Bounded by `max_pages` (total pages visited) and `max_depth` (hops from the
-    landing page). Read-only: only navigates and reads, never interacts. Links
-    are prioritised so the crawl reaches action/content pages, not just nav.
+    landing page). Read-only apart from dismissing a cookie/consent wall (so the
+    real app loads instead of the wall). Links are prioritised so the crawl
+    reaches action/content pages, not just nav.
     """
     site = SiteSurvey(base_url=base_url)
     visited: set[str] = set()
@@ -173,6 +175,9 @@ def survey_site(
         visited.add(url)
         try:
             browser.goto(url)
+            # Click past a consent/cookie interstitial (may navigate to the real
+            # app); observe() then settles and snapshots the actual page.
+            dismiss_interstitials(browser.page)
             obs = browser.observe()
         except Exception as e:
             _console.print(f"[yellow]skipped {url}: {e}[/]")

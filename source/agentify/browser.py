@@ -119,12 +119,21 @@ class Browser:
         # The previous action may have triggered a navigation; retry the JS
         # snapshot a few times so we don't fail mid-flight.
         last_err: Exception | None = None
-        for _ in range(4):
+        for attempt in range(4):
             try:
                 self.page.wait_for_load_state("domcontentloaded", timeout=8000)
+                # Client-rendered SPAs have an empty DOM at domcontentloaded; wait
+                # for the interactive content to actually appear and stabilise
+                # before snapshotting, or we'd see nothing.
+                self._settle_for_content()
                 elements, locator_map, truncated, page_text, title = snapshot(
                     self.page, max_elements
                 )
+                # A successful-but-empty snapshot usually means the SPA is still
+                # hydrating — wait and retry rather than returning a blank page.
+                if not elements and attempt < 3:
+                    self.page.wait_for_timeout(600)
+                    continue
                 self._locator_map = locator_map
                 self._ax_map = {el.id: el for el in elements}
                 return Observation(
@@ -144,6 +153,37 @@ class Browser:
                 except Exception:
                     pass
         raise last_err or RuntimeError("observe failed")
+
+    # Interactive elements the snapshot cares about — used to detect "rendered".
+    _INTERACTIVE_SEL = "a,button,input,select,textarea,[role],[tabindex],[contenteditable=true]"
+
+    def _settle_for_content(
+        self, *, timeout_ms: int = 4000, interval_ms: int = 250, stable_polls: int = 2
+    ) -> None:
+        """Poll until the interactive-element count is non-zero and stops
+        growing for `stable_polls` ticks, or `timeout_ms` elapses. Bounded and
+        non-raising — robust to SPAs and to sites with persistent connections
+        (where `networkidle` would just hang)."""
+        assert self.page is not None
+        js = "() => document.querySelectorAll('" + self._INTERACTIVE_SEL + "').length"
+        prev, stable, waited = -1, 0, 0
+        while waited < timeout_ms:
+            try:
+                cur = int(self.page.evaluate(js))
+            except Exception:
+                cur = prev
+            if cur and cur == prev:
+                stable += 1
+                if stable >= stable_polls:
+                    return
+            else:
+                stable = 0
+            prev = cur
+            try:
+                self.page.wait_for_timeout(interval_ms)
+            except Exception:
+                return
+            waited += interval_ms
 
     def _resolve(self, element_id: int) -> Locator:
         if element_id not in self._locator_map:

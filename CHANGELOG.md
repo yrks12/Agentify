@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **JS-heavy sites, phase 1: settle + consent walls.** `Browser.observe()` now
+  waits for the page to render (polls until the interactive-element count is
+  non-zero and stable, retrying on an empty snapshot) instead of firing at
+  `domcontentloaded` — client-rendered SPAs (Booking, X) no longer come back with
+  zero elements. The crawler dismisses common cookie/consent interstitials
+  (new `interstitials.py`, reject-first then accept) so `crawl`/`map` reach the
+  real app instead of a "before you continue" wall (Google Flights/Maps, LinkedIn).
 - **Fail-soft recovery.** When a tool fails partway, `RecipeFailure` now carries
   `partial` (data extracted before the failure) and `url` (where the browser
   landed). `call` prints the salvaged partial + URL instead of discarding them;
