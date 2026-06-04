@@ -28,6 +28,8 @@ The skill ships everything pre-installed at `$SKILL_DIR/venv/` and the source at
 
 The CLI's `_load_env` walks up from the package and finds `source/.env` automatically, so `OPENAI_API_KEY` is already wired up.
 
+**Works on modern JS-heavy sites.** The browser waits for client-rendered SPAs to actually render before snapshotting (instead of seeing a blank page), the crawler clicks past cookie/consent walls (e.g. "before you continue"), and both capture and replay reach controls inside `<iframe>`s. Custom ARIA widgets (combobox/autocomplete/date-grid) are operated like native fields. Not handled: hard CAPTCHA/anti-bot (use a real/manual `--session`), canvas/WebGL apps, and closed shadow DOM.
+
 ## Phase 1 — map a site (one-shot per site)
 
 Crawls the landing page, asks the LLM to propose tool functions, prompts you to accept/reject each one, then drives the site to record a deterministic recipe per tool. Output is written to `$SKILL_DIR/source/recipes/<name>.tools.json`.
