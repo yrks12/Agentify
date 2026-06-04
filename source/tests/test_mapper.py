@@ -7,8 +7,12 @@ parameter-independent autocomplete normalization.
 
 from agentify.mapper import (
     ToolProposal,
+    _link_specificity,
     _normalize_autocomplete,
+    _normalize_link,
     _placeholders_for,
+    _prioritize_links,
+    _same_origin,
 )
 
 
@@ -67,3 +71,61 @@ def test_autocomplete_leaves_plain_typing_untouched():
         {"op": "wait", "ms": 500},
     ]
     assert _normalize_autocomplete(steps) == steps
+
+
+# --------------------------------------------------------- deep crawl (#9)
+
+BASE = "https://site.example/"
+
+
+def test_normalize_link_resolves_relative_and_strips_fragment():
+    assert _normalize_link("/products/42", BASE) == "https://site.example/products/42"
+    assert _normalize_link("about", BASE) == "https://site.example/about"
+    assert _normalize_link("/x#section", BASE) == "https://site.example/x"
+    # absolute same-origin passes through
+    assert _normalize_link("https://site.example/y", BASE) == "https://site.example/y"
+
+
+def test_normalize_link_drops_non_navigational_and_cross_origin():
+    for bad in ("", "   ", "#", "#top", "javascript:void(0)", "mailto:a@b.c", "tel:+123"):
+        assert _normalize_link(bad, BASE) is None
+    assert _normalize_link("https://other.example/z", BASE) is None  # cross-origin
+
+
+def test_same_origin():
+    assert _same_origin(BASE, "https://site.example/deep/page")
+    assert not _same_origin(BASE, "https://evil.example/")
+
+
+def test_link_specificity_counts_path_depth_and_query():
+    assert _link_specificity("https://site.example/") == 0
+    assert _link_specificity("https://site.example/blog") == 1
+    assert _link_specificity("https://site.example/blog/post/123") == 3
+    assert _link_specificity("https://site.example/item?id=9") == 2  # 1 seg + query
+
+
+def test_prioritize_puts_keyword_pages_first():
+    links = [
+        "https://site.example/about",
+        "https://site.example/login",  # keyword
+    ]
+    assert _prioritize_links(links)[0] == "https://site.example/login"
+
+
+def test_prioritize_prefers_deeper_content_over_shallow_nav():
+    links = [
+        "https://site.example/home",            # shallow nav chrome
+        "https://site.example/blog/the-article",  # deeper content
+    ]
+    # Neither is a keyword link, so the deeper/more-specific one wins.
+    assert _prioritize_links(links)[0] == "https://site.example/blog/the-article"
+
+
+def test_prioritize_dedupes_preserving_first_seen_for_ties():
+    links = [
+        "https://site.example/a",
+        "https://site.example/a",
+        "https://site.example/b",
+    ]
+    out = _prioritize_links(links)
+    assert out == ["https://site.example/a", "https://site.example/b"]

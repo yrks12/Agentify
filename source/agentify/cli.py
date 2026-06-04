@@ -13,7 +13,7 @@ from rich.syntax import Syntax
 from . import registry as registry_mod
 from .browser import Browser
 from .llm import DEFAULT_MODEL, LLM
-from .mapper import map_site
+from .mapper import DEFAULT_MAX_DEPTH, DEFAULT_MAX_PAGES, map_site, survey_site
 from .recipe import Engine, RecipeFailure
 from .session import ensure_authenticated, manual_bootstrap
 
@@ -52,12 +52,14 @@ def map(
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
     interactive: Annotated[bool, typer.Option("--interactive/--auto-approve")] = True,
     model: Annotated[str, typer.Option("--model")] = DEFAULT_MODEL,
+    max_pages: Annotated[int, typer.Option("--max-pages", help="Max pages the crawler visits.")] = DEFAULT_MAX_PAGES,
+    max_depth: Annotated[int, typer.Option("--max-depth", help="Max link hops from the landing page.")] = DEFAULT_MAX_DEPTH,
 ) -> None:
     """Phase 1: crawl, propose tools, get user approval, record recipes."""
     _load_env()
     registry = map_site(
         url=url, slug=name, headless=headless, interactive=interactive,
-        llm=LLM(model=model),
+        llm=LLM(model=model), max_pages=max_pages, max_depth=max_depth,
     )
     if not registry.tools:
         _console.print("[red]No tools recorded.[/]")
@@ -65,6 +67,44 @@ def map(
     path = registry_mod.save(registry)
     _console.print(f"[green]wrote {path}[/]")
     _console.print(f"[green]tools: {[t.name for t in registry.tools]}[/]")
+
+
+@app.command()
+def crawl(
+    url: Annotated[str, typer.Option("--url", help="Site URL to crawl.")],
+    max_pages: Annotated[int, typer.Option("--max-pages", help="Max pages to visit.")] = DEFAULT_MAX_PAGES,
+    max_depth: Annotated[int, typer.Option("--max-depth", help="Max link hops from the landing page.")] = DEFAULT_MAX_DEPTH,
+    headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", help="Load a saved session so the crawl sees authed pages."),
+    ] = None,
+) -> None:
+    """Preview the crawl (no LLM): survey the site and list discovered pages.
+
+    Useful to tune `--max-pages`/`--max-depth` before paying for `map`'s tool
+    proposals + recording. Read-only — only navigates and reads.
+    """
+    from rich.table import Table
+    from rich import box
+
+    session_file = registry_mod.session_path(session) if session else None
+    if session_file is not None and not session_file.exists():
+        _console.print(f"[yellow]no saved session {session!r} at {session_file}; crawling logged-out.[/]")
+        session_file = None
+
+    _console.rule(f"[bold cyan]crawl {url}  (max_pages={max_pages}, max_depth={max_depth})")
+    with Browser(headless=headless, storage_state=session_file) as browser:
+        survey = survey_site(browser, url, max_pages=max_pages, max_depth=max_depth)
+
+    table = Table(box=box.ROUNDED, border_style="cyan", show_lines=False)
+    table.add_column("Depth", justify="right", style="magenta")
+    table.add_column("Title", style="cyan", max_width=40, overflow="ellipsis")
+    table.add_column("URL", style="white", overflow="fold")
+    for p in survey.pages:
+        table.add_row(str(p.depth), p.title or "—", p.url)
+    _console.print(table)
+    _console.print(f"[green]surveyed {len(survey.pages)} page(s)[/]")
 
 
 @app.command()

@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urldefrag, urljoin, urlparse
 
 from rich.console import Console
 from rich.panel import Panel
@@ -42,6 +42,7 @@ class PageSurvey:
     ax_tree_text: str
     page_text: str
     nav_links: list[str] = field(default_factory=list)
+    depth: int = 0  # hops from the landing page (0 = landing)
 
 
 @dataclass
@@ -63,6 +64,20 @@ class SiteSurvey:
         return "\n".join(chunks)
 
 
+# Defaults raised from the old hardcoded 4-page passive crawl; both are
+# overridable from the `map` / `crawl` CLI commands.
+DEFAULT_MAX_PAGES = 10
+DEFAULT_MAX_DEPTH = 2
+
+# Links whose URL hints at an action page or a content page worth reaching.
+# "article"/"item"/"product"/"user"/"story"/"question" pull the crawl onto real
+# content (the README's "never visited an article" gap), not just nav chrome.
+_PRIORITY_KEYWORDS = (
+    "contact", "form", "search", "book", "demo", "signup", "login", "post",
+    "article", "item", "product", "user", "story", "question", "detail",
+)
+
+
 def _same_origin(base: str, other: str) -> bool:
     try:
         b, o = urlparse(base), urlparse(other)
@@ -71,14 +86,88 @@ def _same_origin(base: str, other: str) -> bool:
         return False
 
 
-def survey_site(browser: Browser, base_url: str, max_pages: int = 4) -> SiteSurvey:
-    """Visit the landing page plus a few same-origin nav links."""
+def _normalize_link(href: str, base: str) -> Optional[str]:
+    """Absolutise a same-origin content link, or return None to drop it.
+
+    Drops empty links, non-navigational schemes (`javascript:`/`mailto:`/`tel:`)
+    and pure in-page anchors (`#...`), resolves relatives against `base`, strips
+    the fragment, and rejects cross-origin links. Pure — unit-tested.
+    """
+    href = (href or "").strip()
+    if not href or href.startswith(("javascript:", "mailto:", "tel:", "#")):
+        return None
+    absolute = urldefrag(urljoin(base, href)).url
+    if not absolute or not _same_origin(base, absolute):
+        return None
+    return absolute
+
+
+def _link_specificity(url: str) -> int:
+    """How 'deep'/content-y a URL looks: path segments (+1 if it has a query)."""
+    pr = urlparse(url)
+    segs = [s for s in pr.path.split("/") if s]
+    return len(segs) + (1 if pr.query else 0)
+
+
+def _prioritize_links(
+    links: list[str], *, keywords: tuple[str, ...] = _PRIORITY_KEYWORDS,
+    content_first: bool = True,
+) -> list[str]:
+    """Order candidate links so the crawl reaches useful pages first.
+
+    Keyword/action pages lead; then (when `content_first`) more-specific/deeper
+    links beat shallow nav chrome. Deduplicated; stable for ties. Pure — the
+    Playwright href reads live in `_collect_links`, so this is unit-testable.
+    """
+    seen: set[str] = set()
+    unique: list[str] = []
+    for h in links:
+        if h not in seen:
+            seen.add(h)
+            unique.append(h)
+
+    def sort_key(h: str) -> tuple[bool, int]:
+        is_keyword = any(k in h.lower() for k in keywords)
+        spec = _link_specificity(h) if content_first else 0
+        return (not is_keyword, -spec)
+
+    return sorted(unique, key=sort_key)
+
+
+def _collect_links(browser: Browser, obs, base_url: str) -> list[str]:
+    """Same-origin content links on the observed page (thin Playwright reads)."""
+    out: list[str] = []
+    for el in obs.elements:
+        if el.role != "link":
+            continue
+        try:
+            raw = browser.page.locator(
+                f'[data-w2a-id="{el.w2a_id}"]'
+            ).get_attribute("href") or ""
+        except Exception:
+            raw = ""
+        link = _normalize_link(raw, base_url)
+        if link:
+            out.append(link)
+    return out
+
+
+def survey_site(
+    browser: Browser, base_url: str,
+    max_pages: int = DEFAULT_MAX_PAGES, max_depth: int = DEFAULT_MAX_DEPTH,
+) -> SiteSurvey:
+    """Crawl the landing page and same-origin links, breadth-first.
+
+    Bounded by `max_pages` (total pages visited) and `max_depth` (hops from the
+    landing page). Read-only: only navigates and reads, never interacts. Links
+    are prioritised so the crawl reaches action/content pages, not just nav.
+    """
     site = SiteSurvey(base_url=base_url)
     visited: set[str] = set()
-    queue: list[str] = [base_url]
+    queue: list[tuple[str, int]] = [(base_url, 0)]
 
     while queue and len(site.pages) < max_pages:
-        url = queue.pop(0)
+        url, depth = queue.pop(0)
         if url in visited:
             continue
         visited.add(url)
@@ -89,47 +178,22 @@ def survey_site(browser: Browser, base_url: str, max_pages: int = 4) -> SiteSurv
             _console.print(f"[yellow]skipped {url}: {e}[/]")
             continue
 
-        # Find new same-origin nav links worth following.
-        candidate_links: list[str] = []
-        for el in obs.elements:
-            if el.role != "link":
-                continue
-            href = ""
-            try:
-                href = browser.page.locator(
-                    f'[data-w2a-id="{el.w2a_id}"]'
-                ).get_attribute("href") or ""
-            except Exception:
-                href = ""
-            if not href or href.startswith(("javascript:", "#", "mailto:", "tel:")):
-                continue
-            if href.startswith("/"):
-                # join with base origin
-                pr = urlparse(base_url)
-                href = f"{pr.scheme}://{pr.netloc}{href}"
-            if not _same_origin(base_url, href):
-                continue
-            candidate_links.append(href)
-
+        ordered = _prioritize_links(_collect_links(browser, obs, base_url))
         site.pages.append(
             PageSurvey(
                 url=obs.url,
                 title=obs.title,
                 ax_tree_text=obs.text,
                 page_text=obs.page_text,
-                nav_links=candidate_links[:8],
+                nav_links=ordered[:8],
+                depth=depth,
             )
         )
 
-        # Prioritize links whose name suggests an action page
-        priority_keywords = ("contact", "form", "search", "book", "demo", "signup", "login", "post")
-        sorted_links = sorted(
-            candidate_links,
-            key=lambda h: not any(k in h.lower() for k in priority_keywords),
-        )
-        for h in sorted_links:
-            if h not in visited and h not in queue:
-                queue.append(h)
+        if depth < max_depth:
+            for h in ordered:
+                if h not in visited and all(h != q for q, _ in queue):
+                    queue.append((h, depth + 1))
 
     return site
 
@@ -746,6 +810,8 @@ def map_site(
     headless: bool = True,
     interactive: bool = True,
     llm: Optional[LLM] = None,
+    max_pages: int = DEFAULT_MAX_PAGES,
+    max_depth: int = DEFAULT_MAX_DEPTH,
 ) -> SiteRegistry:
     llm = llm or LLM()
 
@@ -754,7 +820,7 @@ def map_site(
     # 1. Survey
     _console.print("[bold]Phase 1/4:[/] crawling pages...")
     with Browser(headless=headless) as crawler:
-        survey = survey_site(crawler, url)
+        survey = survey_site(crawler, url, max_pages=max_pages, max_depth=max_depth)
     _console.print(f"  surveyed {len(survey.pages)} pages")
 
     # 2. Propose

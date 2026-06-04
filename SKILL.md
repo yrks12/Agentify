@@ -41,6 +41,18 @@ Flags:
 - `--auto-approve` — skip the interactive accept/reject step
 - `--no-headless` — show the browser while recording
 - `--model gpt-4o-mini` — override `AGENTIFY_MODEL` from .env
+- `--max-pages N` / `--max-depth D` — how far the crawler explores (default 10 / 2)
+
+### Preview the crawl (no LLM)
+
+See exactly which pages `map` will survey — handy for tuning `--max-pages`/`--max-depth` before paying for proposals + recording. Read-only; no model call.
+
+```bash
+"$SKILL_DIR/venv/bin/python" -m agentify.cli crawl \
+  --url https://news.ycombinator.com --max-pages 8 --max-depth 2
+```
+
+Add `--session NAME` to crawl with a saved login (`storage_state`) so authenticated pages are visited too.
 
 ### Multi-step flows (any site, no per-site code)
 
@@ -160,4 +172,4 @@ If Playwright is upgraded, reinstall the browser:
 
 ## Full reference
 
-See `$SKILL_DIR/README.md` for the design rationale, sessions/login, remaining limitations (no iteration op, shallow crawler), and extension paths.
+See `$SKILL_DIR/README.md` for the design rationale, sessions/login, remaining limitations (no iteration op, no interactive crawling), and extension paths.

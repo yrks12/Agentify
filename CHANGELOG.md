@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Deeper, configurable crawl.** The map crawler is now a depth-aware, budgeted,
+  content-aware BFS: `--max-pages` / `--max-depth` (on `map`, defaults 10 / 2)
+  control breadth and hops, and link selection prefers action pages and deeper
+  *content* over repeated nav chrome, so the survey reaches article/item/product
+  pages the old 4-page skim never saw. Interacting during the crawl (submitting
+  searches, opening modals) remains out of scope.
+- **`agentify crawl` command.** Previews the crawl with no LLM — lists the pages
+  `map` would survey (url · title · depth) so you can tune budget before paying
+  for proposals/recording. `--session NAME` loads a saved `storage_state` so the
+  crawl can see authenticated pages.
 - **Conditional branching (`if_verify`).** A new Engine op,
   `{"op": "if_verify", "check": {kind, value, …}, "then": [...steps], "else": […]}`,
   evaluates a probe once (same kinds as `verify`) and runs the chosen branch.
