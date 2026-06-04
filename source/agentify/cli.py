@@ -33,6 +33,45 @@ def _load_env() -> None:
     load_dotenv(override=False)
 
 
+def _failure_payload(exc: RecipeFailure) -> dict:
+    """Structured, LLM-facing recovery context for a failed tool replay.
+
+    Carries where it died (`url`), which step/op, and any data extracted before
+    the failure (`partial`) — so the model can recover instead of guessing.
+    """
+    payload: dict = {
+        "error": f"RecipeFailure step {exc.step_index}: {exc.reason}",
+        "failed_step": exc.step_index,
+        "op": exc.op,
+        "url": exc.url,
+    }
+    if exc.partial:
+        payload["partial"] = exc.partial
+    return payload
+
+
+def _repeat_failure_hint(
+    failed_tools: list[str], tool: str, *, threshold: int = 2
+) -> Optional[str]:
+    """Hint to stop the LLM burning calls re-picking a tool that keeps failing.
+
+    `failed_tools` is the running, ordered list of tools that failed (the current
+    failure last). Returns a hint once `tool` has failed `threshold`+ times in a
+    row, else None.
+    """
+    streak = 0
+    for t in reversed(failed_tools):
+        if t != tool:
+            break
+        streak += 1
+    if streak >= threshold:
+        return (
+            f"The tool '{tool}' has failed {streak} times in a row; try a "
+            "different tool or approach, or call done(success=false)."
+        )
+    return None
+
+
 def _resolve_session_name(site: str, session: Optional[str], no_session: bool) -> Optional[str]:
     """Session persistence is ON by default, named after the site.
 
@@ -154,6 +193,18 @@ def call(
             result = engine.execute(recipe, parsed_args)
         except RecipeFailure as e:
             _console.print(f"[red]RecipeFailure at step {e.step_index}: {e.reason}[/]")
+            if e.url:
+                _console.print(f"[red]  failed on:[/] {e.url}")
+            # Fail soft: show what was extracted before the failure rather than
+            # discarding it, so a late failure still hands back partial data.
+            if e.partial:
+                _console.print(
+                    Panel(
+                        Syntax(_json.dumps(e.partial, indent=2, default=str), "json"),
+                        title="partial result (salvaged before failure)",
+                        border_style="yellow",
+                    )
+                )
             raise typer.Exit(code=1)
 
         # Persist any session changes (cookies rotate / refresh during the call).
@@ -244,6 +295,7 @@ def run_mapped(
     _console.print()
 
     aggregated: dict = {}
+    failed_tools: list[str] = []  # ordered failures, for the repeat-failure guard
 
     session_name = _resolve_session_name(site, session, no_session)
     session_file = registry_mod.session_path(session_name) if session_name else None
@@ -323,8 +375,17 @@ def run_mapped(
                     aggregated[tool_name] = tool_result
                     _console.print(f"  [green][OK] Recipe executed successfully in {time.time() - exec_start:.1f}s[/]")
                 except RecipeFailure as e:
-                    tool_result = {"error": f"RecipeFailure step {e.step_index}: {e.reason}"}
-                    _console.print(f"  [red][ERR] Recipe failed at step {e.step_index}: {e.reason}[/]")
+                    failed_tools.append(tool_name)
+                    tool_result = _failure_payload(e)
+                    hint = _repeat_failure_hint(failed_tools, tool_name)
+                    if hint:
+                        tool_result["hint"] = hint
+                    where = f" on {e.url}" if e.url else ""
+                    _console.print(
+                        f"  [red][ERR] Recipe failed at step {e.step_index} ({e.op}){where}: {e.reason}[/]"
+                    )
+                    if e.partial:
+                        _console.print(f"  [yellow]salvaged partial: {list(e.partial)}[/]")
 
             # Print tool result (try to format beautifully as Table if it contains a list of dicts)
             results_data = None
