@@ -113,6 +113,7 @@ def crawl(
     url: Annotated[str, typer.Option("--url", help="Site URL to crawl.")],
     max_pages: Annotated[int, typer.Option("--max-pages", help="Max pages to visit.")] = DEFAULT_MAX_PAGES,
     max_depth: Annotated[int, typer.Option("--max-depth", help="Max link hops from the landing page.")] = DEFAULT_MAX_DEPTH,
+    elements: Annotated[bool, typer.Option("--elements", help="Print the interactive elements observed per page (incl. inside iframes).")] = False,
     headless: Annotated[bool, typer.Option("--headless/--no-headless")] = True,
     session: Annotated[
         Optional[str],
@@ -122,7 +123,8 @@ def crawl(
     """Preview the crawl (no LLM): survey the site and list discovered pages.
 
     Useful to tune `--max-pages`/`--max-depth` before paying for `map`'s tool
-    proposals + recording. Read-only — only navigates and reads.
+    proposals + recording. `--elements` prints the interactive controls seen per
+    page (including any inside iframes). Read-only — only navigates and reads.
     """
     from rich.table import Table
     from rich import box
@@ -144,6 +146,13 @@ def crawl(
         table.add_row(str(p.depth), p.title or "—", p.url)
     _console.print(table)
     _console.print(f"[green]surveyed {len(survey.pages)} page(s)[/]")
+
+    if elements:
+        for p in survey.pages:
+            _console.print(Panel(
+                p.ax_tree_text or "(no interactive elements observed)",
+                title=f"elements @ {p.url}", border_style="dim",
+            ))
 
 
 @app.command()
