@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Runtime robustness for replay.** The `Engine` now retries **transient**
+  step failures (Playwright timeouts, detached elements, navigation/network
+  races) with a small bounded backoff — real-site flakiness no longer kills a
+  tool that would succeed on a second try. Deterministic failures (a failed
+  `verify`, an unknown op, a missing field) still fail fast. Retry knobs are
+  `Engine(max_retries=…, backoff_s=…)`.
+- **`optional: true` step flag.** A step marked optional (and the presentational
+  `scroll`/`wait`/`wait_for` ops) is logged and **skipped** when it fails instead
+  of aborting the whole recipe — useful for best-effort steps like dismissing a
+  banner.
+
+### Changed
+- **Actionable failure messages.** `RecipeFailure` now carries the failing `op`
+  and a single de-noised line (op + target + first error line) instead of a raw
+  multi-line Playwright stack — improving both the `call` error output and the
+  `{"error": …}` payload `run-mapped` feeds back to the LLM.
+
 ### Fixed
 - **Parameter binding for non-text actions.** Native `<select>` values and
   clicks on radios / listbox-options / named links are now parameterised to
