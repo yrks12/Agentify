@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-04
+
 ### Added
 - **JS-heavy sites: iframe-aware capture & resolve.** `ax_tree.snapshot()` now
   collects interactive elements from the main frame and every child `<iframe>`
@@ -123,5 +125,6 @@ Initial public release.
 - Test suite (hermetic: no network, Playwright, or OpenAI key required).
 - Example recipe under `examples/`.
 
-[Unreleased]: https://github.com/rivka2003/Agentify/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/rivka2003/Agentify/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/rivka2003/Agentify/releases/tag/v0.2.0
 [0.1.0]: https://github.com/rivka2003/Agentify/releases/tag/v0.1.0
