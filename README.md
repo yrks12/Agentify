@@ -283,18 +283,23 @@ this list, open it and extract X." To paginate HN to page 5, you'd need
   run the sub-steps with a `{{_item}}` variable in scope. Mapper has to
   learn to *propose* such recipes for list-shaped sites.
 
-### 3. No branching (`if_verify`)
-`verify` either passes or raises `RecipeFailure`. There's no "if the
-cart is empty, go shop; else go to checkout." Every conditional has to
-live in the runtime LLM via tool composition, which is fine for top-level
-decisions but awkward for "does this modal have a Cancel button or a
-Close button?" micro-branches.
+### 3. ~~No branching (`if_verify`)~~ — ✅ DONE
+**Resolved.** The Engine has an `if_verify` op:
+`{"op": "if_verify", "check": {kind, value, …}, "then": [...steps], "else": [...steps]}`.
+It evaluates the `check` probe once (the same `page_text_contains` /
+`url_contains` / `element_exists` kinds as `verify`) and runs the chosen branch.
+Sub-steps go through the same per-step machinery, so they keep transient-retry +
+`optional`, and `if_verify` can nest inside a branch. This covers the "if a modal
+is open, dismiss it; else carry on" and "if the cart is empty, shop; else
+checkout" micro-branches. Branches are consumable by hand-authored recipes and
+composable by the `run-mapped` LLM.
 
-- **Why it matters:** any site with dialogs, optional flows, or
-  validation errors that the recipe needs to react to.
-- **Fix size:** medium. Add
-  `if_verify {kind, value, then: [...steps], else: [...steps]}` to
-  `recipe.py`'s Engine and recurse on the chosen branch.
+- **Still out of scope:** **native JS dialogs** (`alert` / `confirm` / `prompt`)
+  — Playwright auto-accepts them today (no `page.on("dialog")` handler is
+  registered), and capturing them needs map-time work; DOM modals/overlays are
+  already handled via `if_verify {element_exists}` → click Close. Auto-proposing
+  branches at **map** time is also deferred (recipes record a single linear
+  trace); author `if_verify` by hand or let the runtime LLM compose.
 
 ### 4. Shallow Crawler → shallow tool proposals
 The Crawler only visits the landing page + a few same-origin nav links.
