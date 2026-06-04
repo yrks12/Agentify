@@ -301,19 +301,27 @@ composable by the `run-mapped` LLM.
   branches at **map** time is also deferred (recipes record a single linear
   trace); author `if_verify` by hand or let the runtime LLM compose.
 
-### 4. Shallow Crawler → shallow tool proposals
-The Crawler only visits the landing page + a few same-origin nav links.
-Anything deep in a flow — logged-in pages, search results, multi-step
-wizards, modals — is invisible to the Proposer, so no tools are proposed
-for it. That's why Wikipedia got `search_wikipedia` but not
-`get_article_facts(query)`: the Crawler never visited an article.
+### 4. ~~Shallow Crawler → shallow tool proposals~~ — ✅ DONE (deeper crawl)
+**Improved.** The crawler is now a **depth-aware, budgeted, content-aware**
+breadth-first crawl instead of a fixed 4-page link skim:
 
-- **Why it matters:** the Proposer is the bottleneck on how rich the
-  generated SDK is.
-- **Fix size:** medium-large. Make the Crawler an agent itself —
-  follow forms, interact with menus, capture state at each layer. This
-  is real work because crawling becomes recursive and stateful (and may
-  need login fixtures).
+- `--max-pages` and `--max-depth` (on both `map` and the new `crawl` command)
+  control breadth and how many hops from the landing page; defaults are raised
+  (10 pages, depth 2).
+- Link selection prioritises **action pages** (login/search/…) and **deeper
+  content** over repeated nav chrome, so the survey actually reaches an
+  article / item / product / profile page — the thing that was missing when
+  Wikipedia got `search_wikipedia` but never an article.
+- `agentify crawl --url … [--max-pages N --max-depth D] [--session NAME]`
+  previews the crawl with **no LLM** (lists discovered pages + depths), so you
+  can tune budget before paying for proposals/recording; `--session` loads a
+  saved `storage_state` so the crawl can see **authed** pages.
+
+- **Still out of scope:** *interacting* during the crawl — submitting searches,
+  opening modals, traversing multi-step wizards — remains the larger, agentic
+  (LLM-in-the-loop) piece. The crawl stays read-only (`goto` + read), so it
+  reaches deep *linked* pages but not states that only exist behind a form
+  submission.
 
 ### 5. ~~Param binding fails on non-text actions~~ — ✅ DONE (mostly)
 **Resolved** for the common cases. The Recorder now binds non-text selections
