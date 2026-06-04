@@ -109,7 +109,7 @@ def call(
                 _console.print("[red]could not authenticate; aborting.[/]")
                 raise typer.Exit(code=1)
 
-        engine = Engine(browser)
+        engine = Engine(browser, on_warn=lambda m: _console.print(f"  [yellow]{m}[/]"))
         try:
             result = engine.execute(recipe, parsed_args)
         except RecipeFailure as e:
@@ -214,7 +214,7 @@ def run_mapped(
             if not status.authenticated:
                 _console.print("[red]could not authenticate; aborting.[/]")
                 raise typer.Exit(code=1)
-        engine = Engine(browser)
+        engine = Engine(browser, on_warn=lambda m: _console.print(f"  [yellow]{m}[/]"))
         for call_n in range(1, max_calls + 1):
             _console.print(f"[bold yellow]Step {call_n} - Thinking...[/]")
             start_time = time.time()

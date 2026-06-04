@@ -326,6 +326,25 @@ already templates `{{param}}` into a step's `target`.
   option isn't committed as a clean role+name, and two params sharing one value
   (first match wins). Inspect those recipes.
 
+### Resilience (transient retries + optional steps) — built in
+
+Replay is forgiving of real-site flakiness without sacrificing determinism:
+
+- **Transient failures are retried.** A step that hits a Playwright timeout, a
+  detached/re-rendered element, or a navigation/network race is retried a couple
+  of times with a small backoff (`Engine(max_retries=…, backoff_s=…)`). A single
+  blip no longer kills a tool that would succeed on the next try. Deterministic
+  failures — a failed `verify`, an unknown op, a missing field — still **fail
+  fast**, because retrying them only wastes time.
+- **Non-critical steps can be marked `optional`.** An `"optional": true` step
+  (and the presentational `scroll` / `wait` / `wait_for` ops) is logged and
+  **skipped** on failure instead of aborting the recipe — handy for best-effort
+  actions like dismissing a cookie banner.
+- **Failures are one actionable line.** `RecipeFailure` carries the failing `op`
+  and a de-noised, single-line reason (op + target + first error line) rather
+  than a raw multi-line stack — better for you on `call` and for the LLM's
+  recovery on `run-mapped`.
+
 ### Path forward
 
 The cleanest design decision when extending is: **is the recipe a flat
