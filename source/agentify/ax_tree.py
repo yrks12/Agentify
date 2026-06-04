@@ -140,17 +140,37 @@ class AXElement:
 def snapshot(
     page: Page, max_elements: int = 80
 ) -> tuple[list[AXElement], dict[int, Locator], bool, str, str]:
-    """Return (elements, id->Locator, truncated, page_text, title)."""
-    payload = page.evaluate(_COLLECT_JS) or {}
-    raw = payload.get("elements", []) if isinstance(payload, dict) else []
-    page_text = payload.get("pageText", "") if isinstance(payload, dict) else ""
-    title = payload.get("title", "") if isinstance(payload, dict) else ""
-    truncated = len(raw) > max_elements
-    raw = raw[:max_elements]
+    """Return (elements, id->Locator, truncated, page_text, title).
+
+    Collects from the main frame AND every child `<iframe>` so controls inside an
+    iframe are seen (`_COLLECT_JS` only scans one frame's light DOM). Title and
+    page text come from the main frame; each element's Locator is bound to its own
+    frame so clicks land in the right place. `page.frames` lists the main frame
+    first, so its elements (and the user-facing chrome) lead.
+    """
+    title = ""
+    page_text = ""
+    # (frame, item) pairs, main frame first.
+    collected: list[tuple[object, dict]] = []
+    for fi, frame in enumerate(page.frames):
+        try:
+            payload = frame.evaluate(_COLLECT_JS) or {}
+        except Exception:
+            continue  # cross-origin frame we can't script, or a detached frame
+        if not isinstance(payload, dict):
+            continue
+        if fi == 0:
+            title = payload.get("title", "")
+            page_text = payload.get("pageText", "")
+        for item in payload.get("elements", []):
+            collected.append((frame, item))
+
+    truncated = len(collected) > max_elements
+    collected = collected[:max_elements]
 
     elements: list[AXElement] = []
     locator_map: dict[int, Locator] = {}
-    for i, item in enumerate(raw, start=1):
+    for i, (frame, item) in enumerate(collected, start=1):
         elements.append(
             AXElement(
                 id=i,
@@ -162,7 +182,10 @@ def snapshot(
                 w2a_id=item.get("id", ""),
             )
         )
-        locator_map[i] = page.locator(f'[data-w2a-id="{item["id"]}"]')
+        # Bind to the owning frame so the locator resolves in the right document
+        # (data-w2a-id values can repeat across frames; frame-scoping keeps them
+        # unambiguous).
+        locator_map[i] = frame.locator(f'[data-w2a-id="{item["id"]}"]')
     return elements, locator_map, truncated, page_text, title
 
 
